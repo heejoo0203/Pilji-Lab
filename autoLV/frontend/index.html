@@ -110,15 +110,8 @@
 
   <div class="section">
     <select id="is_san">
-      <option value="false|">일반</option>
-      <option value="true|">산</option>
-      <option value="false|gaji">가지번</option>
-      <option value="false|gaji_sub">가지번(부번세분)</option>
-      <option value="false|block">블럭지번</option>
-      <option value="false|block_lot_sub">블럭지번(롯트세분)</option>
-      <option value="false|block_district">블럭지번(지구)</option>
-      <option value="false|block_lot">블럭지번(롯트)</option>
-      <option value="false|etc">기타지번</option>
+      <option value="false">일반</option>
+      <option value="true">산</option>
     </select>
     <input type="text" id="main_no" placeholder="본번 입력" />
     <span id="hyphen">-</span>
@@ -196,50 +189,96 @@ function addRow() {
   const main = document.getElementById("main_no").value;
   const sub = document.getElementById("sub_no").value;
   const san = document.getElementById("is_san").value;
+
   if (!ld_code || !main) {
     alert("주소와 본번을 입력하세요");
     return;
   }
+
   const tbody = document.querySelector("#result-table tbody");
   const row = tbody.insertRow();
   row.innerHTML = `
-    <td>${count++}</td>
+    <td></td>
     <td data-ld="${ld_code}" data-main="${main}" data-sub="${sub}" data-san="${san}">
       ${sido} ${sigungu} ${dong} ${san === "true" ? "산 " : ""}${main}${sub ? '-' + sub : ''}
     </td>
     <td>-</td>
     <td>-</td>
-    <td><button class="delete" onclick="this.closest('tr').remove()">✕</button></td>
+    <td><button class="delete" onclick="deleteRow(this)">✕</button></td>
   `;
+
+  updateRowNumbers(); // 순번 업데이트
+}
+function deleteRow(button) {
+  const row = button.closest('tr');
+  row.remove();
+  updateRowNumbers();
+}
+function updateRowNumbers() {
+  const rows = document.querySelectorAll("#result-table tbody tr");
+  rows.forEach((row, index) => {
+    row.cells[0].innerText = index + 1;
+  });
 }
 
 async function query() {
   const rows = document.querySelectorAll("#result-table tbody tr");
+
   for (const row of rows) {
+    const priceCell = row.cells[2];
+    const dateCell = row.cells[3];
+
+    // 이미 조회된 경우 넘어감
+    if (priceCell.innerText !== "-" && priceCell.innerText !== "요청 실패" && priceCell.innerText !== "조회 실패") {
+      continue;
+    }
+
     const td = row.cells[1];
     const ld = td.dataset.ld;
     const main = td.dataset.main;
-    const sub = td.dataset.sub;
     const san = td.dataset.san;
+
+    let sub = td.dataset.sub;
+    if (!sub || sub.trim() === "") {
+        sub = 0;
+    } else {
+        sub = Number(sub);
+    }
+
     try {
-      const res = await fetch(`http://127.0.0.1:8000/landprice?ld_code=${ld}&main_no=${main}&sub_no=${sub}&is_san=${san}`);
+      const res = await fetch(`http://127.0.0.1:8000/landprice/api?ld_code=${ld}&main_no=${main}&sub_no=${sub}&is_san=${san}`);
       const data = await res.json();
-      row.cells[2].innerText = data.price_per_m2 ?? "조회 실패";
-      row.cells[3].innerText = data.year ?? "-";
+      priceCell.innerText = data.price_per_m2 ? `${Number(data.price_per_m2).toLocaleString()} 원/m²` : "조회 실패";
+      dateCell.innerText = data.date ?? "-";
     } catch (e) {
-      row.cells[2].innerText = "요청 실패";
+      priceCell.innerText = "요청 실패";
+      dateCell.innerText = "-";
     }
   }
 }
 
+
 function downloadCSV() {
   const rows = document.querySelectorAll("#result-table tr");
   const csv = [];
-  rows.forEach(row => {
-    const cols = Array.from(row.querySelectorAll("th, td")).map(td => `"${td.innerText}"`);
-    csv.push(cols.join(","));
+
+  rows.forEach((row, idx) => {
+    const cells = Array.from(row.querySelectorAll("th, td"));
+
+    // 첫 행은 헤더 → "삭제" 제외
+    if (idx === 0) {
+      cells.pop();  // 마지막 "삭제" 헤더 제거
+    } else {
+      cells.pop();  // 각 데이터 행에서 삭제 버튼 열 제거
+    }
+
+    const rowData = cells.map(td => `"${td.innerText}"`);
+    csv.push(rowData.join(","));
   });
-  const blob = new Blob([csv.join("\n")], { type: "text/csv;charset=utf-8;" });
+
+  const BOM = "\uFEFF";  // UTF-8 with BOM
+  const blob = new Blob([BOM + csv.join("\n")], { type: "text/csv;charset=utf-8;" });
+
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = "개별공시지가.csv";
@@ -247,6 +286,8 @@ function downloadCSV() {
   link.click();
   document.body.removeChild(link);
 }
+
+
 </script>
 
 </body>

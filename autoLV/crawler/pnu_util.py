@@ -11,6 +11,6 @@ def make_pnu(ld_code: str, main_no: int, sub_no: int = 0, is_san: bool = False) 
     """
     main_str = str(main_no).zfill(4)
     sub_str = str(sub_no).zfill(4)
-    san_code = "1" if is_san else "2"
+    san_code = "0" if is_san else "1"
 
-    return f"{ld_code}{main_str}{sub_str}{san_code}"
+    return f"{ld_code}{san_code}{main_str}{sub_str}"
