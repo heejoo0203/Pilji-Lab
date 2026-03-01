@@ -54,3 +54,10 @@ class LandLookupResponse(BaseModel):
     pnu: str
     address_summary: str
     rows: list[LandResultRow]
+
+
+class RoadNameListResponse(BaseModel):
+    sido: str
+    sigungu: str
+    initial: str
+    roads: list[str]

@@ -1,5 +1,6 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -26,6 +27,11 @@ class Settings(BaseSettings):
     vworld_api_key: str = Field(default="", alias="VWORLD_API_KEY")
     vworld_api_domain: str = Field(default="localhost", alias="VWORLD_API_DOMAIN")
     vworld_timeout_seconds: int = Field(default=15, alias="VWORLD_TIMEOUT_SECONDS")
+    road_name_file_path: str = Field(default="", alias="ROAD_NAME_FILE_PATH")
 
 
 settings = Settings()
+
+# Repository root fallback: autoLV/TN_SPRD_RDNM.txt
+if not settings.road_name_file_path:
+    settings.road_name_file_path = str(Path(__file__).resolve().parents[4] / "TN_SPRD_RDNM.txt")

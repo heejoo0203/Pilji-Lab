@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useAuth } from "@/app/components/auth-provider";
-import { ROAD_INITIALS, roadsByInitial } from "@/app/lib/address";
+import { ROAD_INITIALS } from "@/app/lib/address";
 import { addSearchHistory, loadSearchHistory } from "@/app/lib/history-storage";
 import type { LdMap, LandResultRow, SearchTab } from "@/app/lib/types";
 
@@ -31,6 +31,8 @@ export default function SearchPage() {
 
   const [roadInitial, setRoadInitial] = useState<"" | (typeof ROAD_INITIALS)[number]>("");
   const [roadName, setRoadName] = useState("");
+  const [roadList, setRoadList] = useState<string[]>([]);
+  const [roadLoading, setRoadLoading] = useState(false);
 
   const [sanType, setSanType] = useState<(typeof SAN_OPTIONS)[number]>("일반");
   const [mainNo, setMainNo] = useState("");
@@ -47,7 +49,6 @@ export default function SearchPage() {
   const sidoList = useMemo(() => Object.keys(ldMap), [ldMap]);
   const sigunguList = useMemo(() => (sido ? Object.keys(ldMap[sido] ?? {}) : []), [ldMap, sido]);
   const dongList = useMemo(() => (sido && sigungu ? Object.keys(ldMap[sido]?.[sigungu] ?? {}) : []), [ldMap, sido, sigungu]);
-  const roadList = useMemo(() => (sigungu ? roadsByInitial(sigungu, roadInitial) : []), [sigungu, roadInitial]);
 
   useEffect(() => {
     void loadCodes();
@@ -79,6 +80,7 @@ export default function SearchPage() {
     setDong("");
     setRoadInitial("");
     setRoadName("");
+    setRoadList([]);
   };
 
   const onSelectSigungu = (value: string) => {
@@ -86,7 +88,49 @@ export default function SearchPage() {
     setDong("");
     setRoadInitial("");
     setRoadName("");
+    setRoadList([]);
   };
+
+  useEffect(() => {
+    if (searchTab !== "도로명") {
+      setRoadList([]);
+      setRoadLoading(false);
+      return;
+    }
+    if (!sido || !sigungu || !roadInitial) {
+      setRoadList([]);
+      setRoadLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const fetchRoadNames = async () => {
+      setRoadLoading(true);
+      try {
+        const query = new URLSearchParams({
+          sido,
+          sigungu,
+          initial: roadInitial,
+        });
+        const res = await landFetch(`/api/v1/land/road-names?${query.toString()}`, {
+          method: "GET",
+          signal: controller.signal,
+        });
+        const payload = (await safeJson(res)) as { roads?: string[]; detail?: unknown };
+        if (!res.ok) throw new Error(extractError(payload, "도로명 목록 조회에 실패했습니다."));
+        setRoadList(Array.isArray(payload.roads) ? payload.roads : []);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setRoadList([]);
+        setMessage(error instanceof Error ? error.message : "도로명 목록 조회 중 오류가 발생했습니다.");
+      } finally {
+        if (!controller.signal.aborted) setRoadLoading(false);
+      }
+    };
+
+    void fetchRoadNames();
+    return () => controller.abort();
+  }, [searchTab, sido, sigungu, roadInitial]);
 
   const runSearch = async () => {
     if (!sido || !sigungu) {
@@ -224,6 +268,7 @@ export default function SearchPage() {
                   ))}
                 </select>
                 <select className="scroll-select roads" size={8} value={roadName} onChange={(e) => setRoadName(e.target.value)}>
+                  {roadLoading ? <option value="">불러오는 중...</option> : null}
                   {roadList.map((road) => (
                     <option key={road} value={road}>
                       {road}
