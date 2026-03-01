@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+
 import type { BulkAddressMode, BulkGuide, BulkJob } from "@/app/lib/types";
 
 type Props = {
@@ -16,7 +18,43 @@ type Props = {
 };
 
 export function BulkUploadPanel(props: Props) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
   const rowsLimitText = props.guide ? `최대 ${props.guide.max_rows.toLocaleString()}행` : "최대 10,000행";
+
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOver(false);
+
+    const file = event.dataTransfer.files?.[0] ?? null;
+    props.onSelectFile(file);
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLLabelElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openFilePicker();
+    }
+  };
 
   return (
     <section className="panel">
@@ -62,8 +100,19 @@ export function BulkUploadPanel(props: Props) {
       </div>
 
       <div className="file-grid">
-        <label className="dropzone file-picker">
+        <label
+          className={`dropzone file-picker ${isDragOver ? "drag-over" : ""}`}
+          role="button"
+          tabIndex={0}
+          onClick={openFilePicker}
+          onKeyDown={handleKeyDown}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <input
+            ref={fileInputRef}
             type="file"
             accept=".xlsx,.xls,.csv"
             onChange={(e) => props.onSelectFile(e.target.files?.[0] ?? null)}
