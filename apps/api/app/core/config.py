@@ -1,10 +1,11 @@
+from pathlib import Path
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pathlib import Path
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=(".env", ".env.example"), env_file_encoding="utf-8")
 
     app_name: str = "autoLV API"
     cors_origins: str = Field(
@@ -32,6 +33,11 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Repository root fallback: autoLV/TN_SPRD_RDNM.txt
+# Repository fallback order:
+# 1) docs/TN_SPRD_RDNM.txt
+# 2) TN_SPRD_RDNM.txt (legacy root path)
 if not settings.road_name_file_path:
-    settings.road_name_file_path = str(Path(__file__).resolve().parents[4] / "TN_SPRD_RDNM.txt")
+    repo_root = Path(__file__).resolve().parents[4]
+    docs_path = repo_root / "docs" / "TN_SPRD_RDNM.txt"
+    legacy_path = repo_root / "TN_SPRD_RDNM.txt"
+    settings.road_name_file_path = str(docs_path if docs_path.exists() else legacy_path)
