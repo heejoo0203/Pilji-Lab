@@ -761,7 +761,6 @@ body::before {
   gap: 11px;
 }
 
-.auth-form-grid input {
 .auth-input,
 .auth-form-grid input {
   border: 1px solid var(--line-strong);
