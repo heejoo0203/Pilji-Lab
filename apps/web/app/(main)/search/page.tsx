@@ -31,6 +31,8 @@ export default function SearchPage() {
 
   const [roadInitial, setRoadInitial] = useState<"" | (typeof ROAD_INITIALS)[number]>("");
   const [roadName, setRoadName] = useState("");
+  const [availableInitials, setAvailableInitials] = useState<string[]>([]);
+  const [initialLoading, setInitialLoading] = useState(false);
   const [roadList, setRoadList] = useState<string[]>([]);
   const [roadLoading, setRoadLoading] = useState(false);
 
@@ -80,6 +82,7 @@ export default function SearchPage() {
     setDong("");
     setRoadInitial("");
     setRoadName("");
+    setAvailableInitials([]);
     setRoadList([]);
   };
 
@@ -88,8 +91,55 @@ export default function SearchPage() {
     setDong("");
     setRoadInitial("");
     setRoadName("");
+    setAvailableInitials([]);
     setRoadList([]);
   };
+
+  useEffect(() => {
+    if (searchTab !== "도로명") {
+      setAvailableInitials([]);
+      setInitialLoading(false);
+      return;
+    }
+    if (!sido || !sigungu) {
+      setAvailableInitials([]);
+      setInitialLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const fetchInitials = async () => {
+      setInitialLoading(true);
+      try {
+        const query = new URLSearchParams({ sido, sigungu });
+        const res = await landFetch(`/api/v1/land/road-initials?${query.toString()}`, {
+          method: "GET",
+          signal: controller.signal,
+        });
+        const payload = (await safeJson(res)) as { initials?: string[]; detail?: unknown };
+        if (!res.ok) throw new Error(extractError(payload, "도로명 자음 목록 조회에 실패했습니다."));
+        const nextInitials = Array.isArray(payload.initials) ? payload.initials : [];
+        setAvailableInitials(nextInitials);
+        if (!nextInitials.includes(roadInitial)) {
+          setRoadInitial("");
+          setRoadName("");
+          setRoadList([]);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setAvailableInitials([]);
+        setRoadInitial("");
+        setRoadName("");
+        setRoadList([]);
+        setMessage(error instanceof Error ? error.message : "도로명 자음 목록 조회 중 오류가 발생했습니다.");
+      } finally {
+        if (!controller.signal.aborted) setInitialLoading(false);
+      }
+    };
+
+    void fetchInitials();
+    return () => controller.abort();
+  }, [searchTab, sido, sigungu]);
 
   useEffect(() => {
     if (searchTab !== "도로명") {
@@ -255,13 +305,20 @@ export default function SearchPage() {
                   className="scroll-select initials"
                   size={8}
                   value={roadInitial}
+                  disabled={initialLoading || availableInitials.length === 0}
                   onChange={(e) => {
                     setRoadInitial(e.target.value as "" | (typeof ROAD_INITIALS)[number]);
                     setRoadName("");
                   }}
                 >
                   <option value="">선택</option>
-                  {ROAD_INITIALS.map((ch) => (
+                  {initialLoading ? <option value="" disabled>불러오는 중...</option> : null}
+                  {!initialLoading && availableInitials.length === 0 ? (
+                    <option value="" disabled>
+                      사용 가능한 자음 없음
+                    </option>
+                  ) : null}
+                  {availableInitials.map((ch) => (
                     <option key={ch} value={ch}>
                       {ch}
                     </option>

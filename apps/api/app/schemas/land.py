@@ -61,3 +61,9 @@ class RoadNameListResponse(BaseModel):
     sigungu: str
     initial: str
     roads: list[str]
+
+
+class RoadInitialListResponse(BaseModel):
+    sido: str
+    sigungu: str
+    initials: list[str]

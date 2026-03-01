@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from app.core.config import settings
 
 CHOSEONG = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"]
+ROAD_INITIALS = ["ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"]
 
 _road_cache: dict[tuple[str, str], list[str]] = {}
 _cache_lock = Lock()
@@ -19,6 +20,12 @@ def get_road_names(sido: str, sigungu: str, initial: str) -> list[str]:
 
     roads = get_roads_by_area(sido, sigungu)
     return [name for name in roads if initial_consonant(name) == initial]
+
+
+def get_available_initials(sido: str, sigungu: str) -> list[str]:
+    roads = get_roads_by_area(sido, sigungu)
+    existing = {initial_consonant(name) for name in roads}
+    return [ch for ch in ROAD_INITIALS if ch in existing]
 
 
 def get_roads_by_area(sido: str, sigungu: str) -> list[str]:
