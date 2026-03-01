@@ -21,3 +21,14 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `POST /api/v1/auth/login` : 로그인(쿠키 발급)
 - `POST /api/v1/auth/logout` : 로그아웃(쿠키 삭제)
 - `GET /api/v1/auth/me` : 현재 로그인 사용자 조회
+
+## DB 초기화 및 관리자 계정 생성
+```bash
+cd apps/api
+python scripts/reset_db_and_seed_admin.py
+```
+
+생성 계정:
+- 닉네임: `admin`
+- 이메일: `admin@admin.com`
+- 비밀번호: `admin1234`
