@@ -9,6 +9,14 @@ import { addSearchHistory, loadSearchHistory } from "@/app/lib/history-storage";
 import type { LdMap, LandResultRow, SearchTab } from "@/app/lib/types";
 
 const SAN_OPTIONS = ["일반", "산"] as const;
+const DEFAULT_API_BASE = "http://127.0.0.1:8000";
+
+type LandLookupApiResponse = {
+  search_type: "jibun" | "road";
+  pnu: string;
+  address_summary: string;
+  rows: LandResultRow[];
+};
 
 export default function SearchPage() {
   const { user } = useAuth();
@@ -29,6 +37,7 @@ export default function SearchPage() {
   const [subNo, setSubNo] = useState("");
   const [buildingMainNo, setBuildingMainNo] = useState("");
   const [buildingSubNo, setBuildingSubNo] = useState("");
+  const [searching, setSearching] = useState(false);
 
   const [message, setMessage] = useState("주소를 선택한 뒤 검색 버튼을 눌러주세요.");
   const [rows, setRows] = useState<LandResultRow[]>([]);
@@ -79,56 +88,93 @@ export default function SearchPage() {
     setRoadName("");
   };
 
-  const runSearch = () => {
+  const runSearch = async () => {
     if (!sido || !sigungu) {
       setMessage("시/도와 시/군/구를 선택해 주세요.");
       return;
     }
 
-    if (searchTab === "지번") {
-      if (!dong || !mainNo) {
-        setMessage("지번 검색에는 읍/면/동과 본번이 필요합니다.");
-        return;
-      }
-      const jibun = `${sanType === "산" ? "산 " : ""}${mainNo}${subNo ? `-${subNo}` : ""}`;
-      const summary = `${sido} ${sigungu} ${dong} ${jibun}`;
-      const nextRows = createYearRows({
-        location: `${sido} ${sigungu} ${dong}`,
-        jibun,
+    setSearching(true);
+    setMessage("조회 중입니다...");
+    try {
+      const body =
+        searchTab === "지번"
+          ? buildJibunPayload()
+          : buildRoadPayload();
+      if (!body) return;
+
+      const res = await landFetch("/api/v1/land/single", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
+      const payload = (await safeJson(res)) as LandLookupApiResponse | { detail?: unknown };
+      if (!res.ok) throw new Error(extractError(payload, "개별공시지가 조회에 실패했습니다."));
+
+      const okPayload = payload as LandLookupApiResponse;
+      const nextRows = okPayload.rows ?? [];
       setRows(nextRows);
-      setMessage(`검색 완료: ${summary}`);
+      const summary = okPayload.address_summary || createSummaryFallback(searchTab);
+      setMessage(`검색 완료: ${summary} (총 ${nextRows.length}건)`);
+
       if (isLoggedIn) {
         addSearchHistory({
           ownerKey: user?.user_id ?? user?.email ?? "unknown",
-          type: "지번",
+          type: searchTab,
           summary,
           results: nextRows,
         });
       }
-      return;
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "조회 중 오류가 발생했습니다.";
+      setRows([]);
+      setMessage(text);
+    } finally {
+      setSearching(false);
     }
+  };
 
+  const buildJibunPayload = () => {
+    if (!dong || !mainNo) {
+      setMessage("지번 검색에는 읍/면/동과 본번이 필요합니다.");
+      return null;
+    }
+    const ldCode = ldMap[sido]?.[sigungu]?.[dong];
+    if (!ldCode) {
+      setMessage("선택한 읍/면/동의 법정동 코드를 찾지 못했습니다.");
+      return null;
+    }
+    return {
+      search_type: "jibun" as const,
+      ld_code: ldCode,
+      san_type: sanType,
+      main_no: mainNo,
+      sub_no: subNo,
+    };
+  };
+
+  const buildRoadPayload = () => {
     if (!roadName || !buildingMainNo) {
       setMessage("도로명 검색에는 도로명과 건물번호가 필요합니다.");
-      return;
+      return null;
+    }
+    return {
+      search_type: "road" as const,
+      sido,
+      sigungu,
+      road_name: roadName,
+      building_main_no: buildingMainNo,
+      building_sub_no: buildingSubNo,
+    };
+  };
+
+  const createSummaryFallback = (type: SearchTab) => {
+    if (type === "지번") {
+      const jibun = `${sanType === "산" ? "산 " : ""}${mainNo}${subNo ? `-${subNo}` : ""}`;
+      return `${sido} ${sigungu} ${dong} ${jibun}`;
     }
     const roadAddress = `${roadName} ${buildingMainNo}${buildingSubNo ? `-${buildingSubNo}` : ""}`;
-    const summary = `${sido} ${sigungu} ${roadAddress}`;
-    const nextRows = createYearRows({
-      location: `${sido} ${sigungu} ${roadAddress}`,
-      jibun: "변환지번 12-1",
-    });
-    setRows(nextRows);
-    setMessage(`검색 완료: ${summary}`);
-    if (isLoggedIn) {
-      addSearchHistory({
-        ownerKey: user?.user_id ?? user?.email ?? "unknown",
-        type: "도로명",
-        summary,
-        results: nextRows,
-      });
-    }
+    return `${sido} ${sigungu} ${roadAddress}`;
   };
 
   return (
@@ -212,8 +258,8 @@ export default function SearchPage() {
           </div>
         )}
 
-        <button className="btn-primary full" onClick={runSearch}>
-          검색
+        <button className="btn-primary full" onClick={() => void runSearch()} disabled={searching}>
+          {searching ? "검색 중..." : "검색"}
         </button>
         <p className="hint">{message}</p>
       </section>
@@ -282,19 +328,55 @@ function SelectBox(props: {
   );
 }
 
-function createYearRows(params: { location: string; jibun: string }): LandResultRow[] {
-  const rows: LandResultRow[] = [];
-  for (let year = 2025; year >= 1990; year -= 1) {
-    const price = (1_000_000 + (2025 - year) * 11000).toLocaleString("ko-KR");
-    rows.push({
-      기준년도: String(year),
-      토지소재지: params.location,
-      지번: params.jibun,
-      개별공시지가: `${price} 원/㎡`,
-      기준일자: "01월 01일",
-      공시일자: `${year}0430`,
-      비고: "정상",
-    });
+function normalizeBase(base: string): string {
+  return base.replace(/\/+$/, "");
+}
+
+function resolveApiBases(): string[] {
+  const envBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  const bases: string[] = [];
+
+  if (envBase) bases.push(normalizeBase(envBase));
+  if (typeof window !== "undefined") {
+    const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+    bases.push(`${protocol}//${window.location.hostname}:8000`);
+    bases.push("http://localhost:8000");
   }
-  return rows;
+  bases.push(DEFAULT_API_BASE);
+  return Array.from(new Set(bases.map(normalizeBase)));
+}
+
+async function landFetch(path: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown = null;
+  for (const base of resolveApiBases()) {
+    try {
+      return await fetch(`${base}${path}`, {
+        ...init,
+        credentials: "include",
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("API 연결에 실패했습니다.");
+}
+
+async function safeJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+
+function extractError(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+  const detail = (payload as { detail?: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object") {
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return fallback;
 }

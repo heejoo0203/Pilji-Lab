@@ -22,6 +22,10 @@ class Settings(BaseSettings):
 
     cookie_secure: bool = Field(default=False, alias="COOKIE_SECURE")
     cookie_samesite: str = Field(default="lax", alias="COOKIE_SAMESITE")
+    vworld_api_base_url: str = Field(default="https://api.vworld.kr", alias="VWORLD_API_BASE_URL")
+    vworld_api_key: str = Field(default="", alias="VWORLD_API_KEY")
+    vworld_api_domain: str = Field(default="localhost", alias="VWORLD_API_DOMAIN")
+    vworld_timeout_seconds: int = Field(default=15, alias="VWORLD_TIMEOUT_SECONDS")
 
 
 settings = Settings()

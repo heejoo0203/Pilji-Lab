@@ -302,6 +302,11 @@ body {
   padding: 12px 14px;
 }
 
+.btn-primary:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
 .btn-primary.full {
   width: 100%;
   margin-top: 10px;

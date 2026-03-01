@@ -16,6 +16,11 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Env
+.env
+.env.*
+!.env.example
+
 # Node.js (추후 React 도입 대비)
 node_modules/
 .next/
