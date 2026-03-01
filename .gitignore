@@ -17,6 +17,7 @@ Thumbs.db
 
 # Node.js (추후 React 도입 대비)
 node_modules/
+.next/
 build/
 dist/
 
