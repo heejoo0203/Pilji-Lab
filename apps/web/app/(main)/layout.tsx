@@ -4,13 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import { ProfileActionModal, type ProfileActionMode } from "@/app/components/profile-action-modal";
 import { useAuth } from "@/app/components/auth-provider";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, openAuth, logout } = useAuth();
+  const {
+    user,
+    openAuth,
+    logout,
+    updateProfile,
+    changePassword,
+    deleteAccount,
+    expectedWithdrawalText,
+    authLoading,
+    authMessage,
+  } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [actionMode, setActionMode] = useState<ProfileActionMode>("profile");
+  const [actionOpen, setActionOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const isLoggedIn = Boolean(user);
@@ -31,7 +44,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     setProfileOpen(false);
+    setActionOpen(false);
   }, [pathname]);
+
+  const openProfileAction = (mode: ProfileActionMode) => {
+    setActionMode(mode);
+    setActionOpen(true);
+    setProfileOpen(false);
+  };
 
   return (
     <div className="app-shell">
@@ -69,17 +89,21 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 type="button"
                 onClick={() => setProfileOpen((prev) => !prev)}
               >
-                <div className="avatar">{userLabel.charAt(0).toUpperCase()}</div>
+                {user?.profile_image_url ? (
+                  <img className="avatar avatar-image" src={user.profile_image_url} alt="프로필 이미지" />
+                ) : (
+                  <div className="avatar">{userLabel.charAt(0).toUpperCase()}</div>
+                )}
                 <span className="profile-name">{userLabel}</span>
               </button>
               <div className={`profile-dropdown ${profileOpen ? "open" : ""}`}>
-                <button className="profile-action" type="button">
+                <button className="profile-action" type="button" onClick={() => openProfileAction("profile")}>
                   회원 정보 수정
                 </button>
-                <button className="profile-action" type="button">
+                <button className="profile-action" type="button" onClick={() => openProfileAction("password")}>
                   비밀번호 변경
                 </button>
-                <button className="profile-action" type="button">
+                <button className="profile-action" type="button" onClick={() => openProfileAction("withdraw")}>
                   회원 탈퇴
                 </button>
                 <button
@@ -108,6 +132,19 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
       <main className="content-wrap">{children}</main>
+      <ProfileActionModal
+        open={actionOpen}
+        mode={actionMode}
+        user={user}
+        authLoading={authLoading}
+        message={authMessage}
+        expectedWithdrawalText={expectedWithdrawalText}
+        onClose={() => setActionOpen(false)}
+        onUpdateProfile={updateProfile}
+        onChangePassword={changePassword}
+        onDeleteAccount={deleteAccount}
+      />
     </div>
   );
 }
+

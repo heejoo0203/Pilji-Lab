@@ -25,6 +25,14 @@ type AuthContextValue = {
     agreements: boolean;
   }) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (payload: { full_name?: string; profile_image?: File | null }) => Promise<void>;
+  changePassword: (payload: {
+    current_password: string;
+    new_password: string;
+    confirm_new_password: string;
+  }) => Promise<void>;
+  deleteAccount: (confirmationText: string) => Promise<void>;
+  expectedWithdrawalText: string;
   setAuthMessage: (message: string) => void;
   refreshMe: () => Promise<void>;
 };
@@ -39,25 +47,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authMessage, setAuthMessage] = useState("로그인 후 파일 조회 기능을 사용할 수 있습니다.");
 
-  useEffect(() => {
-    void refreshMe();
-  }, []);
-
-  const refreshMe = async () => {
+  async function refreshMe() {
     try {
       const res = await authFetch("/api/v1/auth/me", { method: "GET" });
       if (!res.ok) {
         setUser(null);
       } else {
         const data = (await res.json()) as AuthUser;
-        setUser(data);
+        setUser(normalizeUser(data));
       }
     } catch {
       setUser(null);
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    void refreshMe();
+  }, []);
 
   const openAuth = (mode: AuthMode) => {
     setAuthMode(mode);
@@ -75,9 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const payload = (await res.json()) as AuthUser | { detail?: unknown };
+      const payload = (await safeJson(res)) as AuthUser | { detail?: unknown };
       if (!res.ok) throw new Error(extractError(payload, "로그인에 실패했습니다."));
-      setUser(payload as AuthUser);
+      await refreshMe();
       setAuthMessage("로그인되었습니다.");
       setAuthOpen(false);
     } finally {
@@ -99,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const body = (await res.json()) as { detail?: unknown };
+      const body = (await safeJson(res)) as { detail?: unknown };
       if (!res.ok) throw new Error(extractError(body, "회원가입에 실패했습니다."));
       setAuthMessage("회원가입이 완료되었습니다. 로그인해 주세요.");
       setAuthMode("login");
@@ -125,6 +133,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateProfile = async (payload: { full_name?: string; profile_image?: File | null }) => {
+    setAuthLoading(true);
+    try {
+      const form = new FormData();
+      if (payload.full_name !== undefined) {
+        form.append("full_name", payload.full_name);
+      }
+      if (payload.profile_image) {
+        form.append("profile_image", payload.profile_image);
+      }
+      const res = await authFetch("/api/v1/auth/profile", {
+        method: "PATCH",
+        body: form,
+      });
+      const body = (await safeJson(res)) as AuthUser | { detail?: unknown };
+      if (!res.ok) throw new Error(extractError(body, "회원정보 수정에 실패했습니다."));
+      setUser(normalizeUser(body as AuthUser));
+      setAuthMessage("회원정보가 수정되었습니다.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const changePassword = async (payload: {
+    current_password: string;
+    new_password: string;
+    confirm_new_password: string;
+  }) => {
+    setAuthLoading(true);
+    try {
+      const res = await authFetch("/api/v1/auth/password/change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await safeJson(res)) as { message?: string; detail?: unknown };
+      if (!res.ok) throw new Error(extractError(body, "비밀번호 변경에 실패했습니다."));
+      setAuthMessage(body.message ?? "비밀번호가 변경되었습니다.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const deleteAccount = async (confirmationText: string) => {
+    setAuthLoading(true);
+    try {
+      const res = await authFetch("/api/v1/auth/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation_text: confirmationText }),
+      });
+      const body = (await safeJson(res)) as { detail?: unknown };
+      if (!res.ok) throw new Error(extractError(body, "회원 탈퇴에 실패했습니다."));
+      setUser(null);
+      setAuthOpen(false);
+      setAuthMode("login");
+      setAuthMessage("회원 탈퇴가 완료되었습니다.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const expectedWithdrawalText = useMemo(() => {
+    const nickname = (user?.full_name ?? user?.email?.split("@")[0] ?? "").trim();
+    return nickname ? `${nickname} 탈퇴를 동의합니다` : "";
+  }, [user?.full_name, user?.email]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -139,10 +214,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       logout,
+      updateProfile,
+      changePassword,
+      deleteAccount,
+      expectedWithdrawalText,
       setAuthMessage,
       refreshMe,
     }),
-    [user, loading, authLoading, authOpen, authMode, authMessage]
+    [user, loading, authLoading, authOpen, authMode, authMessage, expectedWithdrawalText]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -167,6 +246,19 @@ function extractError(payload: unknown, fallback: string): string {
     if (typeof message === "string") return message;
   }
   return fallback;
+}
+
+function normalizeUser(user: AuthUser): AuthUser {
+  if (!user.profile_image_url) return user;
+  if (user.profile_image_url.startsWith("http://") || user.profile_image_url.startsWith("https://")) {
+    return user;
+  }
+  if (!user.profile_image_url.startsWith("/")) return user;
+  const base = resolveApiBases()[0];
+  return {
+    ...user,
+    profile_image_url: `${base}${user.profile_image_url}`,
+  };
 }
 
 function normalizeBase(base: string): string {
@@ -207,4 +299,12 @@ async function authFetch(path: string, init: RequestInit): Promise<Response> {
 
   if (lastError instanceof Error) throw lastError;
   throw new Error("API 연결 실패");
+}
+
+async function safeJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
 }

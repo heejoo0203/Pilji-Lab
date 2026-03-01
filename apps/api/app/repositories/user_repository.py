@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.user import User
@@ -27,3 +27,16 @@ def create_user(
     db.refresh(user)
     return user
 
+
+def save_user(db: Session, user: User) -> User:
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def delete_user_by_id(db: Session, user_id: str) -> int:
+    stmt = delete(User).where(User.id == user_id)
+    result = db.execute(stmt)
+    db.commit()
+    return int(result.rowcount or 0)

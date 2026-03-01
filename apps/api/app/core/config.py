@@ -34,6 +34,7 @@ class Settings(BaseSettings):
 
     bulk_storage_dir: str = Field(default="./storage/bulk", alias="BULK_STORAGE_DIR")
     bulk_max_rows: int = Field(default=10000, alias="BULK_MAX_ROWS")
+    profile_image_dir: str = Field(default="./storage/profile_images", alias="PROFILE_IMAGE_DIR")
 
 
 def _resolve_road_name_file_path(configured: str) -> str:

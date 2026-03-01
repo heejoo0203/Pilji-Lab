@@ -5,6 +5,9 @@ export type AuthUser = {
   user_id?: string;
   email: string;
   full_name?: string | null;
+  role?: string;
+  auth_provider?: string;
+  profile_image_url?: string | null;
 };
 
 export type SearchTab = "지번" | "도로명";

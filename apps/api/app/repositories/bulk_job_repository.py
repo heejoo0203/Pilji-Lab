@@ -52,6 +52,11 @@ def list_bulk_jobs_by_user(db: Session, user_id: str, limit: int = 10, offset: i
     return list(db.scalars(stmt).all())
 
 
+def list_all_bulk_jobs_by_user(db: Session, user_id: str) -> list[BulkJob]:
+    stmt = select(BulkJob).where(BulkJob.user_id == user_id)
+    return list(db.scalars(stmt).all())
+
+
 def get_bulk_jobs_by_ids(db: Session, *, user_id: str, job_ids: list[str]) -> list[BulkJob]:
     if not job_ids:
         return []
@@ -63,6 +68,13 @@ def delete_bulk_jobs_by_ids(db: Session, *, user_id: str, job_ids: list[str]) ->
     if not job_ids:
         return 0
     stmt = delete(BulkJob).where(BulkJob.user_id == user_id, BulkJob.id.in_(job_ids))
+    result = db.execute(stmt)
+    db.commit()
+    return int(result.rowcount or 0)
+
+
+def delete_bulk_jobs_by_user(db: Session, *, user_id: str) -> int:
+    stmt = delete(BulkJob).where(BulkJob.user_id == user_id)
     result = db.execute(stmt)
     db.commit()
     return int(result.rowcount or 0)

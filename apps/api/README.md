@@ -25,6 +25,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `LD_CODE_FILE_PATH`: 법정동 코드 파일 경로(미입력 시 `apps/web/public/ld_codes.json` 자동 탐색)
 - `BULK_STORAGE_DIR`: 파일조회 업로드/결과 파일 저장 경로
 - `BULK_MAX_ROWS`: 파일조회 최대 허용 행 수 (기본 `10000`)
+- `PROFILE_IMAGE_DIR`: 프로필 이미지 저장 경로
 
 ## 엔드포인트
 - `GET /` : 서비스 상태
@@ -33,6 +34,9 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `POST /api/v1/auth/login` : 로그인(쿠키 발급)
 - `POST /api/v1/auth/logout` : 로그아웃(쿠키 삭제)
 - `GET /api/v1/auth/me` : 현재 로그인 사용자 조회
+- `PATCH /api/v1/auth/profile` : 닉네임/프로필 사진 수정
+- `POST /api/v1/auth/password/change` : 비밀번호 변경
+- `DELETE /api/v1/auth/account` : 회원 탈퇴
 - `POST /api/v1/land/single` : 지번/도로명 단건 공시지가 조회
 - `GET /api/v1/land/road-initials` : 지역별 사용 가능한 도로명 자음 목록
 - `GET /api/v1/land/road-names` : 지역+자음 기반 도로명 목록

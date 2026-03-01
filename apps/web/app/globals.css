@@ -192,6 +192,10 @@ body::before {
   border: 1px solid #aec6eb;
 }
 
+.avatar-image {
+  object-fit: cover;
+}
+
 .profile-menu {
   position: relative;
 }
@@ -467,6 +471,11 @@ body::before {
   opacity: 0.68;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.btn-primary.danger-fill {
+  background: linear-gradient(120deg, #b91c1c 0%, #dc2626 56%, #ef4444 100%);
+  border-color: #991b1b;
 }
 
 .btn-primary.full {
@@ -753,6 +762,8 @@ body::before {
 }
 
 .auth-form-grid input {
+.auth-input,
+.auth-form-grid input {
   border: 1px solid var(--line-strong);
   border-radius: 10px;
   padding: 11px 12px;
@@ -760,10 +771,30 @@ body::before {
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
+.auth-input:focus,
 .auth-form-grid input:focus {
   outline: none;
   border-color: #8fb2e8;
   box-shadow: 0 0 0 3px rgba(47, 110, 199, 0.16);
+}
+
+.profile-modal {
+  width: min(540px, calc(100vw - 24px));
+}
+
+.profile-modal-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.danger-guide {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff1f2;
+  color: #7f1d1d;
+  line-height: 1.5;
 }
 
 .auth-help-row {
