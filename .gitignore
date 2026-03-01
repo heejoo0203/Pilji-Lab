@@ -30,3 +30,8 @@ dist/
 
 # Local AI notes
 AI_GUIDELINE.md
+
+# Bulk runtime artifacts
+apps/api/storage/
+docs/samples/*_result.xlsx
+docs/samples/~$*
