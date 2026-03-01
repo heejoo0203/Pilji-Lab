@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 from app.core.security import hash_password  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import SessionLocal, engine  # noqa: E402
+from app import models  # noqa: F401, E402
 from app.models.user import User  # noqa: E402
 
 
@@ -39,4 +40,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

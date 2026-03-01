@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     vworld_api_domain: str = Field(default="localhost", alias="VWORLD_API_DOMAIN")
     vworld_timeout_seconds: int = Field(default=15, alias="VWORLD_TIMEOUT_SECONDS")
     road_name_file_path: str = Field(default="", alias="ROAD_NAME_FILE_PATH")
+    ld_code_file_path: str = Field(default="", alias="LD_CODE_FILE_PATH")
+
+    bulk_storage_dir: str = Field(default="./storage/bulk", alias="BULK_STORAGE_DIR")
+    bulk_max_rows: int = Field(default=10000, alias="BULK_MAX_ROWS")
 
 
 def _resolve_road_name_file_path(configured: str) -> str:
@@ -57,5 +61,30 @@ def _resolve_road_name_file_path(configured: str) -> str:
     return str((repo_root / "docs" / "TN_SPRD_RDNM.txt").resolve())
 
 
+def _resolve_ld_code_file_path(configured: str) -> str:
+    candidates: list[Path] = []
+
+    configured_path = Path(configured).expanduser() if configured else None
+    if configured_path:
+        candidates.append(configured_path)
+
+    repo_root = Path(__file__).resolve().parents[4]
+    candidates.extend(
+        [
+            repo_root / "apps" / "web" / "public" / "ld_codes.json",
+            repo_root / "ld_codes.json",
+            Path.cwd() / "apps" / "web" / "public" / "ld_codes.json",
+            Path.cwd() / "ld_codes.json",
+        ]
+    )
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate.resolve())
+
+    return str((repo_root / "apps" / "web" / "public" / "ld_codes.json").resolve())
+
+
 settings = Settings()
 settings.road_name_file_path = _resolve_road_name_file_path(settings.road_name_file_path)
+settings.ld_code_file_path = _resolve_ld_code_file_path(settings.ld_code_file_path)

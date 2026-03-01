@@ -29,3 +29,41 @@ export type SearchHistoryRecord = {
   주소요약: string;
   결과: LandResultRow[];
 };
+
+export type BulkAddressMode = "auto" | "jibun" | "road";
+
+export type BulkJobStatus = "queued" | "processing" | "completed" | "failed";
+
+export type BulkGuide = {
+  max_rows: number;
+  required_common: string[];
+  recommended_jibun: string[];
+  recommended_road: string[];
+  alias_examples: Record<string, string[]>;
+};
+
+export type BulkJob = {
+  job_id: string;
+  file_name: string;
+  status: BulkJobStatus;
+  total_rows: number;
+  processed_rows: number;
+  success_rows: number;
+  failed_rows: number;
+  progress_percent: number;
+  created_at: string;
+  updated_at: string;
+  error_message?: string | null;
+  can_download: boolean;
+};
+
+export type BulkJobListResponse = {
+  items: BulkJob[];
+};
+
+export type BulkJobCreateResponse = {
+  job_id: string;
+  status: BulkJobStatus;
+  total_rows: number;
+  created_at: string;
+};

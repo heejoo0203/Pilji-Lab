@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.bulk import router as bulk_router
 from app.api.health import router as health_router
 from app.api.land import router as land_router
 from app.core.config import settings
@@ -11,7 +12,7 @@ from app.db.session import engine
 
 def _create_tables() -> None:
     # Import models before metadata creation.
-    from app.models import user  # noqa: F401
+    from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 
@@ -29,6 +30,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(land_router)
+app.include_router(bulk_router)
 
 
 @app.on_event("startup")
