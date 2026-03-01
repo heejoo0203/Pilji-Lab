@@ -21,6 +21,7 @@ node_modules/
 .next/
 build/
 dist/
+*.tsbuildinfo
 
 # Local AI notes
 AI_GUIDELINE.md
