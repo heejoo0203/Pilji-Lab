@@ -1,4 +1,4 @@
-# API 명세 (현재 구현 기준)
+# API 명세 (현재 + v1 파일조회 목표)
 
 기본 경로: `/api/v1`  
 인증: 쿠키 기반 JWT (`access_token`, `refresh_token`)
@@ -160,7 +160,111 @@
 }
 ```
 
-## 4. 오류 응답 형식
+## 4. 파일조회 API (v1 목표)
+인증: 로그인 필수 (`credentials: include`)
+
+### GET `/bulk/template`
+설명:
+- 표준 엑셀 양식(.xlsx) 파일을 내려준다.
+- 양식에는 최소 안내 시트(필수/권장 컬럼, 입력 예시)를 포함한다.
+
+응답 200:
+- `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+
+### GET `/bulk/guide`
+설명:
+- 프론트에서 파일조회 안내 문구/양식 규칙을 렌더링할 때 사용하는 메타정보를 반환한다.
+
+응답 200:
+```json
+{
+  "max_rows": 10000,
+  "required_common": ["주소유형"],
+  "recommended_jibun": ["시도", "시군구", "읍면동", "산구분", "본번", "부번"],
+  "recommended_road": ["시도", "시군구", "도로명", "건물본번", "건물부번"],
+  "alias_examples": {
+    "시도": ["시/도", "시도명"],
+    "본번": ["주번", "본번(주번)"]
+  }
+}
+```
+
+### POST `/bulk/jobs`
+설명:
+- 엑셀 파일을 업로드하고 비동기 작업을 생성한다.
+- 열 순서가 달라도 헤더 기반 자동 매핑/전처리를 수행한다.
+
+요청:
+- `multipart/form-data`
+  - `file`: 업로드 파일 (`.xlsx`, `.xls`, `.csv`)
+  - `address_mode`(옵션): `auto | jibun | road` (기본 `auto`)
+
+응답 202:
+```json
+{
+  "job_id": "8f31f6b1-5d7a-4b87-b4f6-75fb0d0d9a49",
+  "status": "queued",
+  "total_rows": 6500,
+  "created_at": "2026-03-02T02:10:30Z"
+}
+```
+
+### GET `/bulk/jobs`
+설명:
+- 로그인 사용자의 파일조회 작업 이력을 최신순으로 반환한다.
+
+응답 200:
+```json
+{
+  "items": [
+    {
+      "job_id": "8f31f6b1-5d7a-4b87-b4f6-75fb0d0d9a49",
+      "file_name": "sample.xlsx",
+      "status": "processing",
+      "total_rows": 6500,
+      "processed_rows": 2150,
+      "success_rows": 2000,
+      "failed_rows": 150,
+      "created_at": "2026-03-02T02:10:30Z",
+      "updated_at": "2026-03-02T02:11:10Z"
+    }
+  ]
+}
+```
+
+### GET `/bulk/jobs/{job_id}`
+설명:
+- 단일 작업의 진행 상태를 조회한다.
+
+응답 200:
+```json
+{
+  "job_id": "8f31f6b1-5d7a-4b87-b4f6-75fb0d0d9a49",
+  "status": "processing",
+  "total_rows": 6500,
+  "processed_rows": 2150,
+  "success_rows": 2000,
+  "failed_rows": 150,
+  "progress_percent": 33.08
+}
+```
+
+### GET `/bulk/jobs/{job_id}/download`
+설명:
+- 작업이 완료되면 결과 파일을 다운로드한다.
+- 결과 파일은 원본 행/컬럼을 유지하고, 뒤쪽에 연도별 공시지가 컬럼(최신순)을 추가한다.
+
+응답 200:
+- `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+
+결과 파일 컬럼 예시(추가 컬럼):
+- `공시지가_2025`
+- `공시지가_2024`
+- `공시지가_2023`
+- `조회상태`
+- `오류사유`
+
+## 5. 오류 응답 형식
 FastAPI 기본 `detail` 형식을 사용합니다.
 
 예시:
@@ -179,3 +283,8 @@ FastAPI 기본 `detail` 형식을 사용합니다.
 - `ROAD_GEOCODE_FAILED`
 - `PARCEL_NOT_FOUND`
 - `UNAUTHORIZED`
+- `BULK_FILE_INVALID`
+- `BULK_ROW_LIMIT_EXCEEDED`
+- `BULK_COLUMN_MAPPING_FAILED`
+- `BULK_JOB_NOT_FOUND`
+- `BULK_JOB_NOT_READY`
