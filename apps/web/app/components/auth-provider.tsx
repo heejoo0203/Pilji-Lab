@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import type { AuthMode, AuthUser } from "@/app/lib/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+const DEFAULT_API_BASE = "http://127.0.0.1:8000";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -45,10 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshMe = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
-        method: "GET",
-        credentials: "include",
-      });
+      const res = await authFetch("/api/v1/auth/me", { method: "GET" });
       if (!res.ok) {
         setUser(null);
       } else {
@@ -73,10 +70,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!email || !password) throw new Error("이메일과 비밀번호를 입력해 주세요.");
     setAuthLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+      const res = await authFetch("/api/v1/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
       const payload = (await res.json()) as AuthUser | { detail?: unknown };
@@ -98,10 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }) => {
     setAuthLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
+      const res = await authFetch("/api/v1/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(payload),
       });
       const body = (await res.json()) as { detail?: unknown };
@@ -115,16 +110,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setAuthLoading(true);
+    let remoteSuccess = false;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("로그아웃 요청에 실패했습니다.");
-      setUser(null);
-      await refreshMe();
-      setAuthMessage("로그아웃되었습니다.");
+      const res = await authFetch("/api/v1/auth/logout", { method: "POST" });
+      remoteSuccess = res.ok;
+    } catch {
+      remoteSuccess = false;
     } finally {
+      setUser(null);
+      setAuthMode("login");
+      setAuthOpen(false);
+      setAuthMessage(remoteSuccess ? "로그아웃되었습니다." : "서버 연결 문제로 로컬 로그아웃 처리되었습니다.");
       setAuthLoading(false);
     }
   };
@@ -171,4 +167,44 @@ function extractError(payload: unknown, fallback: string): string {
     if (typeof message === "string") return message;
   }
   return fallback;
+}
+
+function normalizeBase(base: string): string {
+  return base.replace(/\/+$/, "");
+}
+
+function resolveApiBases(): string[] {
+  const envBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  const bases: string[] = [];
+
+  if (envBase) bases.push(normalizeBase(envBase));
+
+  if (typeof window !== "undefined") {
+    const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+    const hostBase = `${protocol}//${window.location.hostname}:8000`;
+    bases.push(normalizeBase(hostBase));
+    bases.push("http://localhost:8000");
+  }
+
+  bases.push(DEFAULT_API_BASE);
+  return Array.from(new Set(bases));
+}
+
+async function authFetch(path: string, init: RequestInit): Promise<Response> {
+  const bases = resolveApiBases();
+  let lastError: unknown = null;
+
+  for (const base of bases) {
+    try {
+      return await fetch(`${base}${path}`, {
+        ...init,
+        credentials: "include",
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("API 연결 실패");
 }
