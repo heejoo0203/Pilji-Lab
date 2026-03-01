@@ -5,6 +5,12 @@
 autoLV/
   apps/
     api/
+      alembic.ini
+      alembic/
+        env.py
+        script.py.mako
+        versions/
+          20260302_0001_init_v1_schema.py
       app/
         api/
           auth.py
@@ -44,8 +50,9 @@ autoLV/
             template_service.py
         main.py
       scripts/
+        run_migrations.py
         reset_db_and_seed_admin.py
-      storage/               # 런타임 생성(업로드/결과 파일)
+      storage/               # 런타임 생성(업로드/결과/프로필 이미지)
       .env.example
       requirements.txt
       README.md
@@ -59,6 +66,7 @@ autoLV/
         components/
           auth-modal.tsx
           auth-provider.tsx
+          profile-action-modal.tsx
           files/
             bulk-job-table.tsx
             bulk-upload-panel.tsx
@@ -89,6 +97,9 @@ autoLV/
   crawler/   # 레거시 코드
   frontend/  # 레거시 코드
   infra/
+    docker/
+      Dockerfile.api
+      docker-compose.v1.yml
   packages/
   README.md
 ```
@@ -96,10 +107,11 @@ autoLV/
 ## 2. 참고 사항
 - `docs/TN_SPRD_RDNM.txt`는 도로명 자음/목록 필터링 원천 파일이다.
 - `apps/api/storage`는 런타임 산출물 경로이며 `.gitignore`로 제외된다.
+- `apps/api/alembic`은 운영 DB(PostgreSQL) 스키마 마이그레이션 경로다.
 - 파일조회 결과 샘플(`docs/samples/*_result.xlsx`)도 `.gitignore`로 제외된다.
 - 조회기록은 현재 `apps/web`의 `localStorage` 기반이다.
 
 ## 3. 다음 단계 구조 확장
 - `apps/api`에 지도조회/공간집계 모듈 추가
-- PostgreSQL/PostGIS 전환 시 마이그레이션 디렉터리 추가
+- PostgreSQL/PostGIS 전환 시 공간 테이블 마이그레이션 버전 추가
 - Redis 캐시 계층 도입 시 cache 모듈 분리

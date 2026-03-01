@@ -7,6 +7,12 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+PostgreSQL 운영 DB를 사용하는 경우, 실행 전 마이그레이션을 먼저 수행합니다.
+```bash
+cd apps/api
+python scripts/run_migrations.py
+```
+
 ## 환경변수
 기본 템플릿: `apps/api/.env.example`  
 실행 환경에서는 `apps/api/.env` 사용을 권장합니다.
@@ -26,6 +32,16 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `BULK_STORAGE_DIR`: 파일조회 업로드/결과 파일 저장 경로
 - `BULK_MAX_ROWS`: 파일조회 최대 허용 행 수 (기본 `10000`)
 - `PROFILE_IMAGE_DIR`: 프로필 이미지 저장 경로
+
+## 마이그레이션
+- Alembic 경로: `apps/api/alembic`
+- 버전 파일: `apps/api/alembic/versions`
+
+명령:
+```bash
+cd apps/api
+alembic upgrade head
+```
 
 ## 엔드포인트
 - `GET /` : 서비스 상태
@@ -53,6 +69,9 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 cd apps/api
 python scripts/reset_db_and_seed_admin.py
 ```
+
+참고:
+- `reset_db_and_seed_admin.py`는 개발용 초기화 스크립트이며 기존 데이터를 삭제합니다.
 
 생성 계정:
 - 닉네임: `admin`

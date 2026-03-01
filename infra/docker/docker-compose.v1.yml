@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: autolv-postgres
+    environment:
+      POSTGRES_DB: autolv
+      POSTGRES_USER: autolv
+      POSTGRES_PASSWORD: autolv_dev_pw
+    ports:
+      - "5432:5432"
+    volumes:
+      - autolv_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autolv -d autolv"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: autolv-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../../apps/api/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://autolv:autolv_dev_pw@postgres:5432/autolv
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: "lax"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../../apps/api/storage:/app/storage
+
+volumes:
+  autolv_pgdata:
+

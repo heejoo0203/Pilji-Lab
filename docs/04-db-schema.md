@@ -3,6 +3,10 @@
 ## 1. 서버 DB (SQLite)
 현재 서버 DB는 SQLite(`apps/api/autolv.db`)를 사용한다.
 
+운영 배포 기준:
+- `DATABASE_URL`을 PostgreSQL(`postgresql+psycopg://...`)로 설정한다.
+- 스키마 변경은 Alembic(`apps/api/alembic`)으로 관리한다.
+
 ### 1.1 users
 - `id` (String(36), PK)
 - `email` (String(255), UNIQUE, NOT NULL, INDEX)

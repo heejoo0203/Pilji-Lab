@@ -10,24 +10,33 @@ from app.api.bulk import router as bulk_router
 from app.api.health import router as health_router
 from app.api.land import router as land_router
 from app.core.config import settings
-from app.db.base import Base
 from app.db.session import engine
 
 
-def _create_tables() -> None:
+def _is_sqlite() -> bool:
+    return settings.database_url.startswith("sqlite")
+
+
+def _create_tables_for_sqlite() -> None:
     # Import models before metadata creation.
     from app import models  # noqa: F401
+    from app.db.base import Base
 
     Base.metadata.create_all(bind=engine)
 
 
-def _migrate_schema() -> None:
+def _migrate_sqlite_schema() -> None:
     with engine.begin() as conn:
         inspector = inspect(conn)
         if "users" in inspector.get_table_names():
             columns = {col["name"] for col in inspector.get_columns("users")}
             if "profile_image_path" not in columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN profile_image_path VARCHAR(500)"))
+
+
+def _verify_database_connection() -> None:
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
 
 
 def _ensure_runtime_dirs() -> None:
@@ -60,8 +69,12 @@ app.mount(
 @app.on_event("startup")
 def on_startup() -> None:
     _ensure_runtime_dirs()
-    _create_tables()
-    _migrate_schema()
+    if _is_sqlite():
+        _create_tables_for_sqlite()
+        _migrate_sqlite_schema()
+    else:
+        # PostgreSQL/MySQL 등 운영 DB는 Alembic 마이그레이션을 선행한다.
+        _verify_database_connection()
 
 
 @app.get("/")

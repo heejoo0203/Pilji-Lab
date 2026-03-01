@@ -77,9 +77,62 @@
   "email": "user@example.com",
   "full_name": "홍길동",
   "role": "user",
-  "auth_provider": "local"
+  "auth_provider": "local",
+  "profile_image_url": "/media/profile/ab12cd34ef56.png"
 }
 ```
+
+### PATCH `/auth/profile`
+설명:
+- 닉네임과 프로필 사진을 수정한다.
+
+요청:
+- `multipart/form-data`
+  - `full_name` (옵션): 닉네임
+  - `profile_image` (옵션): png/jpg/jpeg/webp, 최대 5MB
+
+응답 200:
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "full_name": "새닉네임",
+  "role": "user",
+  "auth_provider": "local",
+  "profile_image_url": "/media/profile/f0e1d2c3b4a5.webp"
+}
+```
+
+### POST `/auth/password/change`
+요청:
+```json
+{
+  "current_password": "OldPass123!",
+  "new_password": "NewPass456!",
+  "confirm_new_password": "NewPass456!"
+}
+```
+
+응답 200:
+```json
+{
+  "message": "비밀번호가 변경되었습니다."
+}
+```
+
+### DELETE `/auth/account`
+설명:
+- 확인 문구를 정확히 입력해야 탈퇴할 수 있다.
+
+요청:
+```json
+{
+  "confirmation_text": "홍길동 탈퇴를 동의합니다"
+}
+```
+
+응답 204:
+- 본문 없음
 
 ## 3. 개별공시지가 API
 ### POST `/land/single`
@@ -313,3 +366,9 @@ FastAPI 기본 `detail` 형식을 사용한다.
 - `BULK_ROW_LIMIT_EXCEEDED`
 - `BULK_JOB_NOT_FOUND`
 - `BULK_JOB_NOT_READY`
+- `PROFILE_IMAGE_INVALID`
+- `PROFILE_IMAGE_TOO_LARGE`
+- `PROFILE_UPDATE_EMPTY`
+- `PASSWORD_MISMATCH`
+- `PASSWORD_SAME`
+- `WITHDRAW_CONFIRM_INVALID`

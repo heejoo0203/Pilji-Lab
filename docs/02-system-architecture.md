@@ -4,7 +4,7 @@
 - Frontend: Next.js 15 (App Router), TypeScript
 - Backend: FastAPI
 - Database: SQLite (`users`, `bulk_jobs`)
-- File Storage: 로컬 스토리지(`apps/api/storage/bulk`)
+- File Storage: 로컬 스토리지(`apps/api/storage/bulk`, `apps/api/storage/profile_images`)
 - External API: VWorld (주소 변환 + 개별공시지가)
 - Road Data: `docs/TN_SPRD_RDNM.txt` (도로명 자음/목록 필터링)
 - Client History: 브라우저 `localStorage`(개별조회 기록)
@@ -45,7 +45,8 @@
 ## 4. 배포 기준 아키텍처 (v1)
 - Web과 API를 분리 배포
 - API 환경변수로 VWorld 키/도메인/CORS 제어
-- SQLite 파일과 업로드 저장소 경로를 런타임에서 보존
+- 운영 DB는 PostgreSQL을 사용하고 Alembic으로 스키마를 관리
+- 업로드/결과/프로필 이미지 저장소 경로를 런타임에서 보존
 - 헬스체크: `GET /health`
 
 ## 5. 다음 단계 (TO-BE)
