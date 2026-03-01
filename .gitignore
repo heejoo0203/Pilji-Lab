@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *.log
+*.db
 
 # Virtual Environment
 venv/

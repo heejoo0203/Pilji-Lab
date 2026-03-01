@@ -1,22 +1,21 @@
-import os
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.core.config import settings
+from app.db.base import Base
+from app.db.session import engine
 
-app = FastAPI(title="autoLV API", version="0.1.0")
 
-default_origins = [
-    "http://127.0.0.1:3000",
-    "http://localhost:3000",
-]
-env_origins = [
-    origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "").split(",")
-    if origin.strip()
-]
-allow_origins = env_origins or default_origins
+def _create_tables() -> None:
+    # Import models before metadata creation.
+    from app.models import user  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title=settings.app_name, version="0.2.0")
+allow_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +26,12 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(auth_router)
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    _create_tables()
 
 
 @app.get("/")

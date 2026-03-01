@@ -7,11 +7,11 @@
 ### POST `/auth/register`
 요청:
 ```json
-{ "email": "user@example.com", "password": "string" }
+{ "email": "user@example.com", "password": "string", "full_name": "홍길동" }
 ```
 응답 201:
 ```json
-{ "user_id": "uuid", "email": "user@example.com" }
+{ "user_id": "uuid", "email": "user@example.com", "full_name": "홍길동" }
 ```
 
 ### POST `/auth/login`
@@ -21,12 +21,24 @@
 ```
 응답 200:
 ```json
-{ "user_id": "uuid", "email": "user@example.com" }
+{ "user_id": "uuid", "email": "user@example.com", "full_name": "홍길동" }
 ```
 (HttpOnly 쿠키 설정)
 
 ### POST `/auth/logout`
 응답 204
+
+### GET `/auth/me`
+응답 200:
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "full_name": "홍길동",
+  "role": "user",
+  "auth_provider": "local"
+}
+```
 
 ## 2. 단건/다건 주소 조회
 ### POST `/land/query`

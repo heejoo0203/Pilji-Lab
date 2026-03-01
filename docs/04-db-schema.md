@@ -12,7 +12,9 @@
 - id UUID PK
 - email VARCHAR(255) UNIQUE NOT NULL
 - password_hash TEXT NOT NULL
+- full_name VARCHAR(100) NULL
 - role VARCHAR(20) NOT NULL DEFAULT 'user'
+- auth_provider VARCHAR(20) NOT NULL DEFAULT 'local'
 - created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 - updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 
