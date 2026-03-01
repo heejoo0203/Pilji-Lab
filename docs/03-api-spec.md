@@ -7,12 +7,25 @@
 ### POST `/auth/register`
 요청:
 ```json
-{ "email": "user@example.com", "password": "string", "full_name": "홍길동" }
+{
+  "email": "user@example.com",
+  "password": "Abcd1234!",
+  "confirm_password": "Abcd1234!",
+  "full_name": "홍길동",
+  "agreements": true
+}
 ```
 응답 201:
 ```json
 { "user_id": "uuid", "email": "user@example.com", "full_name": "홍길동" }
 ```
+
+검증 규칙:
+- `email`: 형식 검증 + 중복 불가
+- `password`: 8~16자, 영문/숫자/특수문자 조합, UTF-8 72바이트 이하
+- `confirm_password`: `password`와 완전 일치
+- `full_name`: 2~20자, 한글/영문/숫자만 허용(공백/특수문자 불가)
+- `agreements`: `true` 필수
 
 ### POST `/auth/login`
 요청:

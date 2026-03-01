@@ -26,6 +26,7 @@ export default function Home() {
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState("");
+  const [registerAgreements, setRegisterAgreements] = useState(false);
 
   const checkApiHealth = async () => {
     setHealthLoading(true);
@@ -87,11 +88,11 @@ export default function Home() {
           password: loginPassword,
         }),
       });
-      const data = (await response.json()) as AuthUser;
+      const data = (await response.json()) as AuthUser | Record<string, unknown>;
       if (!response.ok) {
-        throw new Error("로그인에 실패했습니다.");
+        throw new Error(extractErrorMessage(data, "로그인에 실패했습니다."));
       }
-      setCurrentUser(data);
+      setCurrentUser(data as AuthUser);
       setAuthMessage("로그인 성공");
     } catch (error) {
       const message = error instanceof Error ? error.message : "로그인 실패";
@@ -103,12 +104,24 @@ export default function Home() {
   };
 
   const submitRegister = async () => {
-    if (!registerEmail || !registerPassword) {
-      setAuthMessage("이메일과 비밀번호를 입력해 주세요.");
+    if (!registerName || !registerEmail || !registerPassword || !registerPasswordConfirm) {
+      setAuthMessage("닉네임, 이메일, 비밀번호, 비밀번호 확인을 모두 입력해 주세요.");
+      return;
+    }
+    if (!/^[A-Za-z0-9가-힣]{2,20}$/.test(registerName)) {
+      setAuthMessage("닉네임은 2~20자의 한글/영문/숫자만 사용할 수 있습니다.");
+      return;
+    }
+    if (!/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,16}$/.test(registerPassword)) {
+      setAuthMessage("비밀번호는 8~16자, 영문/숫자/특수문자를 모두 포함해야 합니다.");
       return;
     }
     if (registerPassword !== registerPasswordConfirm) {
       setAuthMessage("비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+    if (!registerAgreements) {
+      setAuthMessage("필수 약관 동의가 필요합니다.");
       return;
     }
     setAuthLoading(true);
@@ -120,18 +133,23 @@ export default function Home() {
         body: JSON.stringify({
           email: registerEmail,
           password: registerPassword,
-          full_name: registerName || null,
+          confirm_password: registerPasswordConfirm,
+          full_name: registerName,
+          agreements: registerAgreements,
         }),
       });
-      const data = (await response.json()) as AuthUser;
+      const data = (await response.json()) as AuthUser | Record<string, unknown>;
       if (!response.ok) {
-        throw new Error("회원가입에 실패했습니다.");
+        throw new Error(extractErrorMessage(data, "회원가입에 실패했습니다."));
       }
       setAuthMessage("회원가입 성공. 로그인 탭에서 로그인해 주세요.");
       setAuthMode("login");
-      setLoginEmail(data.email);
+      setLoginEmail((data as AuthUser).email);
+      setRegisterName("");
+      setRegisterEmail("");
       setRegisterPassword("");
       setRegisterPasswordConfirm("");
+      setRegisterAgreements(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "회원가입 실패";
       setAuthMessage(message);
@@ -276,13 +294,29 @@ export default function Home() {
                 <button onClick={submitLogin} disabled={authLoading} style={primaryButtonStyle}>
                   {authLoading ? "처리 중..." : "로그인"}
                 </button>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setAuthMessage("아이디 찾기 기능은 준비 중입니다.")}
+                    style={ghostButtonStyle}
+                  >
+                    아이디 찾기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuthMessage("비밀번호 찾기 기능은 준비 중입니다.")}
+                    style={ghostButtonStyle}
+                  >
+                    비밀번호 찾기
+                  </button>
+                </div>
               </div>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
                 <input
                   value={registerName}
                   onChange={(e) => setRegisterName(e.target.value)}
-                  placeholder="이름 (선택)"
+                  placeholder="닉네임 (2~20자, 한글/영문/숫자)"
                   type="text"
                   style={inputStyle}
                 />
@@ -296,7 +330,7 @@ export default function Home() {
                 <input
                   value={registerPassword}
                   onChange={(e) => setRegisterPassword(e.target.value)}
-                  placeholder="비밀번호 (8자 이상)"
+                  placeholder="비밀번호 (8~16자, 영문/숫자/특수문자)"
                   type="password"
                   style={inputStyle}
                 />
@@ -307,6 +341,14 @@ export default function Home() {
                   type="password"
                   style={inputStyle}
                 />
+                <label style={{ display: "flex", gap: 8, alignItems: "center", color: "#334155", fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={registerAgreements}
+                    onChange={(e) => setRegisterAgreements(e.target.checked)}
+                  />
+                  [필수] 서비스 이용약관 및 개인정보 처리방침에 동의합니다.
+                </label>
                 <button onClick={submitRegister} disabled={authLoading} style={primaryButtonStyle}>
                   {authLoading ? "처리 중..." : "회원가입"}
                 </button>
@@ -356,3 +398,37 @@ const secondaryButtonStyle: CSSProperties = {
   color: "#1e293b",
   fontWeight: 600,
 };
+
+const ghostButtonStyle: CSSProperties = {
+  border: "none",
+  borderRadius: 8,
+  padding: "0",
+  cursor: "pointer",
+  background: "transparent",
+  color: "#1d4ed8",
+  fontWeight: 600,
+  textDecoration: "underline",
+  textUnderlineOffset: "2px",
+  textAlign: "left",
+};
+
+function extractErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+
+  const detail = (payload as { detail?: unknown }).detail;
+  if (!detail) return fallback;
+
+  if (typeof detail === "string") return detail;
+
+  if (typeof detail === "object" && detail !== null) {
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0] as { msg?: unknown };
+    if (first && typeof first.msg === "string" && first.msg.trim()) return first.msg;
+  }
+
+  return fallback;
+}
