@@ -309,7 +309,15 @@ def call_vworld_json(path: str, params: dict[str, str]) -> dict[str, Any]:
     body = ""
 
     for attempt in range(max_attempts):
-        req = Request(url=url, method="GET", headers={"Accept": "application/json"})
+        req = Request(
+            url=url,
+            method="GET",
+            headers={
+                "Accept": "application/json",
+                "User-Agent": settings.vworld_user_agent,
+                "Connection": "close",
+            },
+        )
         try:
             with urlopen(req, timeout=settings.vworld_timeout_seconds) as response:
                 body = response.read().decode("utf-8")

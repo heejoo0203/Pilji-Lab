@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     vworld_timeout_seconds: int = Field(default=15, alias="VWORLD_TIMEOUT_SECONDS")
     vworld_retry_count: int = Field(default=2, alias="VWORLD_RETRY_COUNT")
     vworld_retry_backoff_seconds: float = Field(default=0.35, alias="VWORLD_RETRY_BACKOFF_SECONDS")
+    vworld_user_agent: str = Field(
+        default="autoLV/1.0 (+https://auto-lv.vercel.app)",
+        alias="VWORLD_USER_AGENT",
+    )
     road_name_file_path: str = Field(default="", alias="ROAD_NAME_FILE_PATH")
     ld_code_file_path: str = Field(default="", alias="LD_CODE_FILE_PATH")
 
