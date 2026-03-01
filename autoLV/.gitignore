@@ -19,3 +19,6 @@ Thumbs.db
 node_modules/
 build/
 dist/
+
+# Local AI notes
+AI_GUIDELINE.md

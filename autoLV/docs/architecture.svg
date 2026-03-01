@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <defs>
+    <style>
+      .title{font:700 34px Arial;fill:#0b1320}
+      .label{font:600 20px Arial;fill:#0b1320}
+      .small{font:500 16px Arial;fill:#1f2937}
+      .box{rx:16;ry:16;stroke:#0f172a;stroke-width:2}
+      .arrow{stroke:#334155;stroke-width:3;fill:none;marker-end:url(#m)}
+    </style>
+    <marker id="m" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#334155"/>
+    </marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fbff"/>
+      <stop offset="100%" stop-color="#eef5ff"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="980" fill="url(#bg)"/>
+  <text x="60" y="70" class="title">autoLV v2 Architecture and Data Flow</text>
+
+  <rect class="box" x="80" y="150" width="260" height="120" fill="#dbeafe"/>
+  <text x="140" y="198" class="label">User Browser</text>
+  <text x="112" y="230" class="small">Next.js Web App</text>
+
+  <rect class="box" x="430" y="120" width="300" height="170" fill="#bfdbfe"/>
+  <text x="520" y="170" class="label">Vercel</text>
+  <text x="470" y="205" class="small">Frontend Hosting</text>
+  <text x="470" y="232" class="small">SSR + API Proxy</text>
+
+  <rect class="box" x="850" y="120" width="320" height="170" fill="#c7d2fe"/>
+  <text x="965" y="170" class="label">FastAPI</text>
+  <text x="890" y="205" class="small">Auth / Query / Job API</text>
+  <text x="890" y="232" class="small">Validation + Persistence</text>
+
+  <rect class="box" x="1250" y="120" width="260" height="170" fill="#ddd6fe"/>
+  <text x="1330" y="170" class="label">Redis</text>
+  <text x="1288" y="205" class="small">Celery Queue</text>
+  <text x="1288" y="232" class="small">Job State Cache</text>
+
+  <rect class="box" x="850" y="380" width="320" height="170" fill="#fde68a"/>
+  <text x="960" y="430" class="label">Celery Worker</text>
+  <text x="885" y="465" class="small">Address normalize + API calls</text>
+  <text x="885" y="492" class="small">10k row async processing</text>
+
+  <rect class="box" x="450" y="380" width="300" height="170" fill="#fef3c7"/>
+  <text x="548" y="430" class="label">PostgreSQL</text>
+  <text x="490" y="465" class="small">Users / Query Logs / Jobs</text>
+  <text x="490" y="492" class="small">Result metadata</text>
+
+  <rect class="box" x="1250" y="380" width="260" height="170" fill="#fed7aa"/>
+  <text x="1315" y="430" class="label">S3 Storage</text>
+  <text x="1288" y="465" class="small">Input/Output files</text>
+  <text x="1288" y="492" class="small">Download artifacts</text>
+
+  <rect class="box" x="850" y="650" width="320" height="170" fill="#bbf7d0"/>
+  <text x="925" y="700" class="label">Public APIs</text>
+  <text x="885" y="735" class="small">VWorld / Address Services</text>
+  <text x="885" y="762" class="small">Land price + parcel data</text>
+
+  <path class="arrow" d="M340 210 L430 205"/>
+  <path class="arrow" d="M730 205 L850 205"/>
+  <path class="arrow" d="M1170 205 L1250 205"/>
+  <path class="arrow" d="M1250 235 L1170 235"/>
+
+  <path class="arrow" d="M1010 290 L1010 380"/>
+  <path class="arrow" d="M910 450 L750 450"/>
+  <path class="arrow" d="M750 500 L850 500"/>
+  <path class="arrow" d="M1170 450 L1250 450"/>
+  <path class="arrow" d="M1010 550 L1010 650"/>
+  <path class="arrow" d="M1010 820 L1010 550"/>
+
+  <text x="75" y="910" class="small">Flow: Browser -> Web -> API -> Queue -> Worker -> External APIs / DB / Storage -> API -> Browser</text>
+</svg>
