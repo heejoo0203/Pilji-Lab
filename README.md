@@ -1,20 +1,27 @@
 # autoLV
 
-지번 주소/도로명 주소를 기반으로 개별공시지가를 조회하고, 로그인 사용자는 엑셀 대량 조회(최대 10,000행)와 결과 다운로드, 조회 이력 관리를 할 수 있는 웹 서비스입니다.
+autoLV는 지번/도로명 기반으로 개별공시지가를 조회하는 웹 서비스입니다.  
+현재는 단건 조회와 인증 기능, 조회기록 UI를 중심으로 MVP를 구현한 상태입니다.
 
-## 주요 기능
-- 지번 주소 조회
-- 도로명 주소 조회
-- 다건 주소 일괄 조회
-- 엑셀 업로드 기반 비동기 대량 조회 (최대 10,000행)
-- 조회 결과 엑셀 다운로드
-- 로그인 사용자 전용 조회 이력 페이지
+## 현재 구현 기능
+- 지번 검색: 시/도 → 시/군/구 → 읍/면/동 + 지번(일반/산, 본번/부번) 입력
+- 도로명 검색: 시/도 → 시/군/구 → 자음 → 도로명 + 건물번호 입력
+- 개별공시지가 실데이터 조회: VWorld API 연동
+- 회원가입/로그인/로그아웃/내 정보 조회 (`HttpOnly` 쿠키 기반)
+- 조회기록 페이지: 로그인 사용자 기준 최근순 표시, 클릭 시 결과 재열람
+- 비로그인/로그인 상태에 따른 네비게이션 및 화면 분기
 
-## 기술 스택
-- Frontend: Next.js 15, TypeScript, Tailwind CSS, shadcn/ui
-- Backend: FastAPI, Celery, Redis
-- Database: PostgreSQL
-- Infra: Vercel, Railway, Neon, S3 호환 스토리지
+## 현재 미구현(다음 단계)
+- 엑셀 업로드 및 10,000행 비동기 일괄 처리
+- 서버 DB 기반 조회기록 영구 저장
+- 회원정보 수정/비밀번호 변경/회원탈퇴 실제 처리
+- 소셜 로그인
+
+## 기술 스택 (AS-IS)
+- Web: Next.js 15, React 19, TypeScript, Tailwind CSS
+- API: FastAPI, SQLAlchemy, Pydantic Settings
+- DB: SQLite (`apps/api/autolv.db`)
+- 외부 연동: VWorld API (개별공시지가, 주소 변환)
 
 ## 빠른 시작
 ### 1) 저장소 클론
@@ -23,50 +30,78 @@ git clone https://github.com/heejoo0203/autoLV.git
 cd autoLV
 ```
 
-### 2) 프로젝트 문서 확인
+### 2) API 환경변수 설정
+`apps/api/.env` 파일을 만들고 아래 값을 설정합니다.
+```env
+CORS_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
+DATABASE_URL=sqlite:///./autolv.db
+JWT_SECRET_KEY=change-me-access-key
+JWT_REFRESH_SECRET_KEY=change-me-refresh-key
+ACCESS_TOKEN_EXP_MINUTES=60
+REFRESH_TOKEN_EXP_DAYS=14
+VWORLD_API_BASE_URL=https://api.vworld.kr
+VWORLD_API_DOMAIN=localhost
+VWORLD_TIMEOUT_SECONDS=15
+VWORLD_API_KEY=발급받은_키
+ROAD_NAME_FILE_PATH=
+```
+
+참고:
+- `VWORLD_API_DOMAIN=localhost` 기준으로 동작하도록 맞춰져 있습니다.
+- `ROAD_NAME_FILE_PATH`를 비워두면 기본 경로 `docs/TN_SPRD_RDNM.txt`를 자동 탐색합니다.
+
+### 3) API 실행
+```bash
+cd apps/api
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 4) Web 실행
+```bash
+cd apps/web
+npm install
+npm run dev:clean
+```
+
+접속:
+- Web: `http://localhost:3000`
+- API: `http://127.0.0.1:8000`
+
+## 관리자 계정 초기화 스크립트
+```bash
+cd apps/api
+python scripts/reset_db_and_seed_admin.py
+```
+
+기본 계정:
+- 이메일: `admin@admin.com`
+- 비밀번호: `admin1234`
+
+## 문서
 - 요구사항: `docs/01-requirements.md`
 - 시스템 아키텍처: `docs/02-system-architecture.md`
 - API 명세: `docs/03-api-spec.md`
-- DB 스키마: `docs/04-db-schema.md`
+- DB/저장 구조: `docs/04-db-schema.md`
 - 폴더 구조: `docs/05-folder-structure.md`
+- 기능 상세: `docs/feature-spec.md`
 
-### 3) 개발 환경 준비(예정)
-아래 구성은 단계적으로 추가됩니다.
-- `apps/web`: Next.js 앱
-- `apps/api`: FastAPI 앱
-- `apps/worker`: Celery 워커
-
-## 프로젝트 구조
+## 레포 구조(요약)
 ```text
 autoLV/
   apps/
-    web/
     api/
-    worker/
-  backend/      # 레거시 코드(참고용)
-  crawler/      # 레거시 코드(참고용)
-  frontend/     # 레거시 코드(참고용)
+    web/
   docs/
-  infra/
-  packages/
-  README.md
+  backend/   # 레거시
+  frontend/  # 레거시
+  crawler/   # 레거시
 ```
 
-## 문서 정책
-- README는 제품 소개와 사용 안내 중심으로 유지합니다.
-- 설계/명세/세부 계획은 `docs/*`에서 관리합니다.
-- 기능/스키마/API 변경 시 관련 문서를 함께 갱신합니다.
-
-## 기여 방법
-1. 이슈를 생성하거나 기존 이슈를 확인합니다.
-2. 기능 단위로 브랜치를 분리합니다.
-3. 변경 후 테스트/검증을 수행합니다.
-4. Conventional Commit 메시지로 커밋합니다.
-5. PR에 변경 목적, 범위, 검증 내용을 작성합니다.
+## 기여
+1. 기능 단위로 작업하고 커밋합니다.
+2. Conventional Commit 메시지 규칙을 사용합니다.
+3. 기능 변경 시 관련 문서를 함께 갱신합니다.
 
 ## 기여자
 - heejoo0203
-
-## 라이선스
-별도 라이선스 파일이 아직 없으므로 기본적으로 모든 권리를 보유합니다.
-오픈소스 공개를 원할 경우 `LICENSE` 파일을 추가해 명시해야 합니다.

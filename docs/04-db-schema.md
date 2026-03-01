@@ -1,86 +1,68 @@
-# 데이터베이스 스키마 (PostgreSQL)
+# 데이터 저장 구조 (현재 구현 기준)
 
-## ERD 요약
-- users 1:N query_logs
-- users 1:N excel_jobs
-- excel_jobs 1:N excel_job_rows
-- query_logs N:1 address_norm_cache (선택 캐시)
-
-## 테이블
+## 1. 서버 DB (AS-IS)
+현재 서버 DB는 SQLite 기반이며 사용자 인증 관련 데이터만 저장합니다.
 
 ### users
-- id UUID PK
-- email VARCHAR(255) UNIQUE NOT NULL
-- password_hash TEXT NOT NULL
-- full_name VARCHAR(100) NULL
-- role VARCHAR(20) NOT NULL DEFAULT 'user'
-- auth_provider VARCHAR(20) NOT NULL DEFAULT 'local'
-- created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-- updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+- `id` (String(36), PK)
+- `email` (String(255), UNIQUE, NOT NULL)
+- `password_hash` (String(255), NOT NULL)
+- `full_name` (String(100), NULL)
+- `role` (String(20), NOT NULL, 기본값 `user`)
+- `auth_provider` (String(20), NOT NULL, 기본값 `local`)
+- `created_at` (DateTime, NOT NULL)
+- `updated_at` (DateTime, NOT NULL)
 
-### query_logs
-- id UUID PK
-- user_id UUID NULL FK users(id)
-- query_type VARCHAR(20) NOT NULL  -- manual|excel
-- raw_address TEXT NOT NULL
-- normalized_ld_code CHAR(10) NULL
-- normalized_is_san BOOLEAN NULL
-- normalized_main_no INT NULL
-- normalized_sub_no INT NULL
-- result_status VARCHAR(20) NOT NULL -- ok|failed
-- result_payload JSONB NULL
-- created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+비고:
+- 관리자 계정 생성 스크립트에서 `role=admin`을 사용합니다.
+- SQLAlchemy `Base.metadata.create_all()`로 테이블을 생성합니다.
 
-인덱스:
-- (user_id, created_at desc)
-- (normalized_ld_code, normalized_main_no, normalized_sub_no)
+## 2. 클라이언트 저장소 (AS-IS)
+조회기록은 현재 서버 DB가 아니라 브라우저 `localStorage`에 저장됩니다.
 
-### excel_jobs
-- id UUID PK
-- user_id UUID NOT NULL FK users(id)
-- original_filename TEXT NOT NULL
-- stored_input_key TEXT NOT NULL
-- stored_output_key TEXT NULL
-- status VARCHAR(20) NOT NULL -- queued|running|completed|failed|partial_failed
-- address_column TEXT NULL
-- confidence NUMERIC(4,3) NULL
-- total_rows INT NOT NULL DEFAULT 0
-- processed_rows INT NOT NULL DEFAULT 0
-- success_rows INT NOT NULL DEFAULT 0
-- failed_rows INT NOT NULL DEFAULT 0
-- error_message TEXT NULL
-- created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-- started_at TIMESTAMPTZ NULL
-- completed_at TIMESTAMPTZ NULL
+키:
+- `autolv_search_history_v1`
 
-인덱스:
-- (user_id, created_at desc)
-- (status, created_at desc)
+구조:
+```json
+[
+  {
+    "id": "1700000000000-ab12cd",
+    "ownerKey": "user@example.com",
+    "시각": "2026-03-02T10:20:30.000Z",
+    "유형": "지번",
+    "주소요약": "서울특별시 강남구 도곡동 970",
+    "결과": [
+      {
+        "기준년도": "2025",
+        "토지소재지": "서울특별시 강남구 도곡동",
+        "지번": "970",
+        "개별공시지가": "14,000,000 원/㎡",
+        "기준일자": "01월 01일",
+        "공시일자": "20250430",
+        "비고": ""
+      }
+    ]
+  }
+]
+```
 
-### excel_job_rows
-- id BIGSERIAL PK
-- job_id UUID NOT NULL FK excel_jobs(id) ON DELETE CASCADE
-- row_number INT NOT NULL
-- raw_address TEXT NOT NULL
-- normalized JSONB NULL
-- status VARCHAR(20) NOT NULL -- ok|failed
-- error_code VARCHAR(100) NULL
-- error_message TEXT NULL
-- result_payload JSONB NULL
-- created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+## 3. 초기화/시드
+명령:
+```bash
+cd apps/api
+python scripts/reset_db_and_seed_admin.py
+```
 
-인덱스:
-- (job_id, row_number)
-- (job_id, status)
+효과:
+- DB 초기화(drop/create)
+- 관리자 계정 생성
+  - 이메일: `admin@admin.com`
+  - 비밀번호: `admin1234`
 
-### refresh_tokens (선택, 강제 로그아웃용)
-- id UUID PK
-- user_id UUID NOT NULL FK users(id)
-- token_hash TEXT NOT NULL
-- expires_at TIMESTAMPTZ NOT NULL
-- revoked_at TIMESTAMPTZ NULL
-- created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-
-## 보존 정책
-- excel_job_rows: 90일 보관 (설정 가능)
-- query_logs: 180일 보관 (설정 가능)
+## 4. 다음 단계 (TO-BE)
+다음 릴리스에서 아래 구조를 서버 DB에 추가할 예정입니다.
+- 단건 조회 기록 테이블(`query_logs`)
+- 파일 업로드 작업 테이블(`excel_jobs`)
+- 파일 행 단위 처리 결과 테이블(`excel_job_rows`)
+- refresh token 저장/철회 테이블(`refresh_tokens`, 선택)

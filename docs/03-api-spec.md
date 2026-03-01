@@ -1,9 +1,22 @@
-# API 명세 (1단계)
+# API 명세 (현재 구현 기준)
 
-기본 경로: `/api/v1`
+기본 경로: `/api/v1`  
 인증: 쿠키 기반 JWT (`access_token`, `refresh_token`)
 
-## 1. 인증
+## 1. 공통
+### GET `/`
+응답 200:
+```json
+{ "service": "autoLV-api", "status": "ok" }
+```
+
+### GET `/health`
+응답 200:
+```json
+{ "status": "healthy" }
+```
+
+## 2. 인증 API
 ### POST `/auth/register`
 요청:
 ```json
@@ -15,31 +28,46 @@
   "agreements": true
 }
 ```
+
 응답 201:
 ```json
-{ "user_id": "uuid", "email": "user@example.com", "full_name": "홍길동" }
+{
+  "user_id": "uuid",
+  "email": "user@example.com",
+  "full_name": "홍길동"
+}
 ```
 
 검증 규칙:
 - `email`: 형식 검증 + 중복 불가
-- `password`: 8~16자, 영문/숫자/특수문자 조합, UTF-8 72바이트 이하
-- `confirm_password`: `password`와 완전 일치
-- `full_name`: 2~20자, 한글/영문/숫자만 허용(공백/특수문자 불가)
+- `password`: 8~16자, 영문/숫자/특수문자 포함, UTF-8 기준 72바이트 이하
+- `confirm_password`: password와 동일
+- `full_name`: 2~20자, 한글/영문/숫자만 허용
 - `agreements`: `true` 필수
 
 ### POST `/auth/login`
 요청:
 ```json
-{ "email": "user@example.com", "password": "string" }
+{
+  "email": "user@example.com",
+  "password": "Abcd1234!"
+}
 ```
+
 응답 200:
 ```json
-{ "user_id": "uuid", "email": "user@example.com", "full_name": "홍길동" }
+{
+  "user_id": "uuid",
+  "email": "user@example.com",
+  "full_name": "홍길동"
+}
 ```
-(HttpOnly 쿠키 설정)
+
+비고:
+- 성공 시 HttpOnly 쿠키(`access_token`, `refresh_token`)가 설정됩니다.
 
 ### POST `/auth/logout`
-응답 204
+응답 204 (쿠키 삭제)
 
 ### GET `/auth/me`
 응답 200:
@@ -53,100 +81,101 @@
 }
 ```
 
-## 2. 단건/다건 주소 조회
-### POST `/land/query`
-요청:
+## 3. 개별공시지가 조회 API
+### POST `/land/single`
+지번 검색 요청:
 ```json
 {
-  "addresses": [
-    { "raw": "서울특별시 강남구 역삼동 123-45", "type": "jibun" },
-    { "raw": "서울특별시 강남구 테헤란로 1", "type": "road" }
-  ]
+  "search_type": "jibun",
+  "ld_code": "1168011800",
+  "san_type": "일반",
+  "main_no": "970",
+  "sub_no": "0"
 }
 ```
+
+도로명 검색 요청:
+```json
+{
+  "search_type": "road",
+  "sido": "서울특별시",
+  "sigungu": "강남구",
+  "road_name": "도곡로",
+  "building_main_no": "21",
+  "building_sub_no": ""
+}
+```
+
 응답 200:
 ```json
 {
-  "results": [
+  "search_type": "road",
+  "pnu": "1168011800109700000",
+  "address_summary": "서울특별시 강남구 도곡동 970",
+  "rows": [
     {
-      "raw": "...",
-      "normalized": {"ld_code":"...","is_san":false,"main_no":123,"sub_no":45},
-      "status": "ok",
-      "data": {
-        "address": "...",
-        "jimok": "대",
-        "total_area": 120.5,
-        "units": [{"dong":"101","ho":"1001","area":35.1}],
-        "price_per_m2": 1234567,
-        "year": "2025",
-        "date": "2025-01-01"
-      }
+      "기준년도": "2025",
+      "토지소재지": "서울특별시 강남구 도곡동",
+      "지번": "970",
+      "개별공시지가": "14,000,000 원/㎡",
+      "기준일자": "01월 01일",
+      "공시일자": "20250430",
+      "비고": ""
     }
   ]
 }
 ```
 
-## 3. 엑셀 작업 (인증 필요)
-### POST `/excel/jobs`
-Content-Type: `multipart/form-data`
-- `file`: xlsx/csv
-- `sheet_name` (선택)
-- `address_column_hint` (선택)
+비고:
+- 내부적으로 VWorld API를 호출합니다.
+- 같은 연도 데이터가 여러 건이면 최신 `lastUpdtDt`를 사용합니다.
 
-응답 202:
-```json
-{ "job_id": "uuid", "status": "queued" }
-```
+### GET `/land/road-initials`
+쿼리:
+- `sido`: 시/도
+- `sigungu`: 시/군/구
 
-### GET `/excel/jobs/{job_id}`
 응답 200:
 ```json
 {
-  "job_id":"uuid",
-  "status":"queued|running|completed|failed|partial_failed",
-  "total_rows":10000,
-  "processed_rows":4200,
-  "success_rows":4100,
-  "failed_rows":100,
-  "address_column":"address",
-  "confidence":0.93,
-  "download_url":null
+  "sido": "서울특별시",
+  "sigungu": "강남구",
+  "initials": ["ㄱ", "ㄴ", "ㄷ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅌ", "ㅎ"]
 }
 ```
 
-### GET `/excel/jobs/{job_id}/download`
-응답 302 또는 서명 URL JSON.
+### GET `/land/road-names`
+쿼리:
+- `sido`: 시/도
+- `sigungu`: 시/군/구
+- `initial`: 초성
 
-## 4. 기록 (인증 필요)
-### GET `/history/queries?limit=50&cursor=...`
 응답 200:
 ```json
 {
-  "items":[
-    {"id":"uuid","type":"manual","created_at":"2026-03-01T10:00:00Z","summary":"2 addresses"},
-    {"id":"uuid","type":"excel","created_at":"2026-03-01T09:55:00Z","summary":"10000 rows, completed"}
-  ],
-  "next_cursor":"..."
+  "sido": "서울특별시",
+  "sigungu": "강남구",
+  "initial": "ㄷ",
+  "roads": ["도곡로", "도곡로11길", "도곡로13길"]
 }
 ```
 
-## 5. 오류 모델
+## 4. 오류 응답 형식
+FastAPI 기본 `detail` 형식을 사용합니다.
+
+예시:
 ```json
 {
-  "error": {
-    "code": "ADDRESS_PARSE_FAILED",
-    "message": "Cannot parse road address",
-    "detail": {"row": 19}
+  "detail": {
+    "code": "VWORLD_KEY_MISSING",
+    "message": "VWORLD_API_KEY 설정이 필요합니다."
   }
 }
 ```
 
-공통 오류 코드:
+주요 오류 코드:
+- `VWORLD_KEY_MISSING`
+- `VWORLD_INVALID_KEY` 계열 (VWorld 응답 코드 매핑)
+- `ROAD_GEOCODE_FAILED`
+- `PARCEL_NOT_FOUND`
 - `UNAUTHORIZED`
-- `FORBIDDEN`
-- `VALIDATION_ERROR`
-- `ADDRESS_PARSE_FAILED`
-- `PUBLIC_API_TIMEOUT`
-- `JOB_NOT_FOUND`
-- `FILE_TOO_LARGE`
-- `TOO_MANY_ROWS`
