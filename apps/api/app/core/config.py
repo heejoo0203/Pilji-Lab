@@ -44,6 +44,8 @@ class Settings(BaseSettings):
 
     bulk_storage_dir: str = Field(default="./storage/bulk", alias="BULK_STORAGE_DIR")
     bulk_max_rows: int = Field(default=10000, alias="BULK_MAX_ROWS")
+    bulk_lookup_workers: int = Field(default=6, alias="BULK_LOOKUP_WORKERS")
+    bulk_progress_update_min_seconds: float = Field(default=1.0, alias="BULK_PROGRESS_UPDATE_MIN_SECONDS")
     profile_image_dir: str = Field(default="./storage/profile_images", alias="PROFILE_IMAGE_DIR")
 
 
