@@ -59,12 +59,21 @@ def _normalize_database_url(database_url: str) -> str:
 def _resolve_project_root() -> Path:
     current = Path(__file__).resolve()
     ancestors = [current.parent, *current.parents]
+
+    # 1) Monorepo root 우선 탐색
     for candidate in ancestors:
         if (candidate / "apps").exists() or (candidate / "docs").exists():
             return candidate
 
+    # 2) API 단독 배포 루트 탐색
+    for candidate in ancestors:
+        if (candidate / "alembic.ini").exists() or ((candidate / "app").is_dir() and (candidate / "scripts").is_dir()):
+            return candidate
+
     cwd = Path.cwd()
     if (cwd / "apps").exists() or (cwd / "docs").exists():
+        return cwd
+    if (cwd / "alembic.ini").exists() or ((cwd / "app").is_dir() and (cwd / "scripts").is_dir()):
         return cwd
 
     return current.parent
@@ -81,9 +90,13 @@ def _resolve_road_name_file_path(configured: str) -> str:
     candidates.extend(
         [
             repo_root / "docs" / "TN_SPRD_RDNM.txt",
+            repo_root / "apps" / "api" / "TN_SPRD_RDNM.txt",
             repo_root / "TN_SPRD_RDNM.txt",
+            repo_root / "app" / "data" / "TN_SPRD_RDNM.txt",
             Path.cwd() / "docs" / "TN_SPRD_RDNM.txt",
+            Path.cwd() / "apps" / "api" / "TN_SPRD_RDNM.txt",
             Path.cwd() / "TN_SPRD_RDNM.txt",
+            Path.cwd() / "app" / "data" / "TN_SPRD_RDNM.txt",
         ]
     )
 
@@ -92,7 +105,7 @@ def _resolve_road_name_file_path(configured: str) -> str:
             return str(candidate.resolve())
 
     # Keep deterministic fallback even when file is missing.
-    return str((repo_root / "docs" / "TN_SPRD_RDNM.txt").resolve())
+    return str((repo_root / "apps" / "api" / "TN_SPRD_RDNM.txt").resolve())
 
 
 def _resolve_ld_code_file_path(configured: str) -> str:
@@ -106,9 +119,15 @@ def _resolve_ld_code_file_path(configured: str) -> str:
     candidates.extend(
         [
             repo_root / "apps" / "web" / "public" / "ld_codes.json",
+            repo_root / "apps" / "api" / "ld_codes.json",
+            repo_root / "apps" / "api" / "app" / "data" / "ld_codes.json",
             repo_root / "ld_codes.json",
+            repo_root / "app" / "data" / "ld_codes.json",
             Path.cwd() / "apps" / "web" / "public" / "ld_codes.json",
+            Path.cwd() / "apps" / "api" / "ld_codes.json",
+            Path.cwd() / "apps" / "api" / "app" / "data" / "ld_codes.json",
             Path.cwd() / "ld_codes.json",
+            Path.cwd() / "app" / "data" / "ld_codes.json",
         ]
     )
 
@@ -116,7 +135,7 @@ def _resolve_ld_code_file_path(configured: str) -> str:
         if candidate.exists():
             return str(candidate.resolve())
 
-    return str((repo_root / "apps" / "web" / "public" / "ld_codes.json").resolve())
+    return str((repo_root / "apps" / "api" / "ld_codes.json").resolve())
 
 
 settings = Settings()
