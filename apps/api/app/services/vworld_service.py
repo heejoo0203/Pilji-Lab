@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
 from urllib.parse import urlencode
 
@@ -9,12 +10,18 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from fastapi import HTTPException, status
+from threading import Lock
 
 from app.core.config import settings
 from app.schemas.land import LandLookupRequest, LandLookupResponse, LandResultRow
 
 
 _VWORLD_SESSION: requests.Session | None = None
+_DIRECT_FAILURE_LOCK = Lock()
+_DIRECT_FAILURE_COUNT = 0
+_DIRECT_SKIP_UNTIL = 0.0
+_DIRECT_FAILURE_THRESHOLD = 3
+_DIRECT_SKIP_SECONDS = 120.0
 
 
 def lookup_land_prices(payload: LandLookupRequest) -> LandLookupResponse:
@@ -68,8 +75,9 @@ def compose_pnu(ld_code: str, is_san: bool, main_no: str, sub_no: str) -> str:
 
 def resolve_pnu_from_road(payload: LandLookupRequest) -> dict[str, str]:
     road_number = str(payload.building_main_no or "")
-    if payload.building_sub_no and str(payload.building_sub_no).strip():
-        road_number = f"{road_number}-{str(payload.building_sub_no).strip()}"
+    sub_number = str(payload.building_sub_no or "").strip()
+    if sub_number and sub_number != "0":
+        road_number = f"{road_number}-{sub_number}"
 
     full_road_address = f"{payload.sido} {payload.sigungu} {payload.road_name} {road_number}".strip()
 
@@ -304,10 +312,21 @@ def call_vworld_json(path: str, params: dict[str, str]) -> dict[str, Any]:
     direct_error: HTTPException | None = None
     proxy_error: HTTPException | None = None
 
-    try:
-        return _call_vworld_direct(path, params)
-    except HTTPException as exc:
-        direct_error = exc
+    skip_direct = _should_skip_direct_call()
+    if not skip_direct:
+        try:
+            direct_result = _call_vworld_direct(path, params)
+            _record_direct_call_success()
+            return direct_result
+        except HTTPException as exc:
+            direct_error = exc
+            direct_code, _ = _extract_error_detail(exc)
+            _record_direct_call_failure(direct_code)
+    elif settings.vworld_proxy_url.strip():
+        direct_error = HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "VWORLD_DIRECT_SKIPPED", "message": "직접 호출 쿨다운 중입니다."},
+        )
 
     if settings.vworld_proxy_url.strip():
         try:
@@ -462,3 +481,30 @@ def _extract_error_detail(exc: HTTPException) -> tuple[str, str]:
     if isinstance(detail, str):
         return str(exc.status_code), detail
     return str(exc.status_code), str(detail)
+
+
+def _should_skip_direct_call() -> bool:
+    if not settings.vworld_proxy_url.strip():
+        return False
+    with _DIRECT_FAILURE_LOCK:
+        return time.monotonic() < _DIRECT_SKIP_UNTIL
+
+
+def _record_direct_call_success() -> None:
+    global _DIRECT_FAILURE_COUNT, _DIRECT_SKIP_UNTIL
+    with _DIRECT_FAILURE_LOCK:
+        _DIRECT_FAILURE_COUNT = 0
+        _DIRECT_SKIP_UNTIL = 0.0
+
+
+def _record_direct_call_failure(code: str) -> None:
+    if not settings.vworld_proxy_url.strip():
+        return
+    if code not in {"VWORLD_UNREACHABLE", "VWORLD_HTTP_ERROR", "VWORLD_INVALID_JSON"}:
+        return
+
+    global _DIRECT_FAILURE_COUNT, _DIRECT_SKIP_UNTIL
+    with _DIRECT_FAILURE_LOCK:
+        _DIRECT_FAILURE_COUNT += 1
+        if _DIRECT_FAILURE_COUNT >= _DIRECT_FAILURE_THRESHOLD:
+            _DIRECT_SKIP_UNTIL = time.monotonic() + _DIRECT_SKIP_SECONDS

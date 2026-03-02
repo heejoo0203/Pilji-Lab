@@ -75,14 +75,13 @@ export function BulkJobTable(props: Props) {
                   <td>{job.progress_percent.toFixed(2)}%</td>
                   <td>{formatDateTime(job.created_at)}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="nav-item"
-                      disabled={!job.can_download || props.deleting}
-                      onClick={() => props.onDownload(job)}
-                    >
-                      다운로드
-                    </button>
+                    {job.can_download ? (
+                      <button type="button" className="nav-item" disabled={props.deleting} onClick={() => props.onDownload(job)}>
+                        다운로드
+                      </button>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td className="checkbox-col">
                     <input

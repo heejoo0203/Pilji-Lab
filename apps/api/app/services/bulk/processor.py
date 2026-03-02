@@ -16,9 +16,12 @@ from app.services.bulk.table_reader import load_tabular_data
 from app.services.bulk.job_storage import get_result_file_path
 from app.services.vworld_service import lookup_land_prices
 
+PROGRESS_UPDATE_ROW_INTERVAL = 5
+
 
 def process_bulk_job(*, job_id: str, address_mode: str) -> None:
     db = SessionLocal()
+    job = None
     try:
         job = get_bulk_job_by_id(db, job_id)
         if not job:
@@ -83,17 +86,15 @@ def process_bulk_job(*, job_id: str, address_mode: str) -> None:
                     }
                 )
 
-            if processed_rows % 50 == 0 or processed_rows == total_rows:
-                job = get_bulk_job_by_id(db, job_id)
-                if job:
-                    update_bulk_job_status(
-                        db,
-                        job=job,
-                        status="processing",
-                        processed_rows=processed_rows,
-                        success_rows=success_rows,
-                        failed_rows=failed_rows,
-                    )
+            if processed_rows % PROGRESS_UPDATE_ROW_INTERVAL == 0 or processed_rows == total_rows:
+                update_bulk_job_status(
+                    db,
+                    job=job,
+                    status="processing",
+                    processed_rows=processed_rows,
+                    success_rows=success_rows,
+                    failed_rows=failed_rows,
+                )
 
         year_columns = sorted(year_set, key=lambda value: int(value), reverse=True)
         output_path = get_result_file_path(job_id=job_id, original_name=job.file_name)
@@ -105,7 +106,6 @@ def process_bulk_job(*, job_id: str, address_mode: str) -> None:
             row_results=row_results,
         )
 
-        job = get_bulk_job_by_id(db, job_id)
         if job:
             update_bulk_job_status(
                 db,
@@ -118,7 +118,6 @@ def process_bulk_job(*, job_id: str, address_mode: str) -> None:
                 error_message=None,
             )
     except Exception as exc:  # noqa: BLE001
-        job = get_bulk_job_by_id(db, job_id)
         if job:
             update_bulk_job_status(
                 db,

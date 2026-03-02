@@ -6,6 +6,7 @@ import sys
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import Session
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -13,9 +14,16 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from app.core.config import settings  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
+from app.db.session import SessionLocal  # noqa: E402
+from app.models.user import User  # noqa: E402
+from app.repositories.user_repository import get_user_by_email  # noqa: E402
 
 
 INITIAL_REVISION = "20260302_0001"
+DEFAULT_ADMIN_EMAIL = "admin@admin.com"
+DEFAULT_ADMIN_PASSWORD = "admin1234"
+DEFAULT_ADMIN_NAME = "admin"
 
 
 def _build_alembic_config() -> Config:
@@ -44,6 +52,27 @@ def _needs_bootstrap_stamp(database_url: str) -> bool:
     return not has_data_revision
 
 
+def _seed_default_admin() -> None:
+    db: Session = SessionLocal()
+    try:
+        existing = get_user_by_email(db, DEFAULT_ADMIN_EMAIL)
+        if existing:
+            return
+
+        admin = User(
+            email=DEFAULT_ADMIN_EMAIL,
+            password_hash=hash_password(DEFAULT_ADMIN_PASSWORD),
+            full_name=DEFAULT_ADMIN_NAME,
+            role="admin",
+            auth_provider="local",
+        )
+        db.add(admin)
+        db.commit()
+        print(f"[migrations] default admin created: {DEFAULT_ADMIN_EMAIL}")
+    finally:
+        db.close()
+
+
 def main() -> int:
     cfg = _build_alembic_config()
     db_url = settings.database_url
@@ -53,6 +82,7 @@ def main() -> int:
         command.stamp(cfg, INITIAL_REVISION)
 
     command.upgrade(cfg, "head")
+    _seed_default_admin()
     return 0
 
 
