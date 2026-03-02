@@ -62,13 +62,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </Link>
 
         {!isLoggedIn ? (
-          <nav className="center-nav">
+          <nav className="center-nav guest-nav">
             <Link href="/search" className={`nav-item ${pathname === "/search" ? "active" : ""}`}>
               개별조회
             </Link>
           </nav>
         ) : (
-          <nav className="center-nav">
+          <nav className="center-nav auth-nav">
             <Link href="/search" className={`nav-item ${pathname === "/search" ? "active" : ""}`}>
               개별조회
             </Link>
@@ -147,4 +147,3 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     </div>
   );
 }
-

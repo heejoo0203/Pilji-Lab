@@ -43,7 +43,7 @@ export function BulkJobTable(props: Props) {
         <div className="empty-box">아직 파일 작업 이력이 없습니다.</div>
       ) : (
         <>
-          <table className="data-table bulk-center-table">
+          <table className="data-table bulk-center-table mobile-card-table">
             <thead>
               <tr>
                 <th>파일명</th>
@@ -65,16 +65,16 @@ export function BulkJobTable(props: Props) {
             <tbody>
               {props.jobs.map((job) => (
                 <tr key={job.job_id}>
-                  <td>{job.file_name}</td>
-                  <td>
+                  <td data-label="파일명">{job.file_name}</td>
+                  <td data-label="상태">
                     <span className={`status-badge ${job.status}`}>{toStatusLabel(job.status)}</span>
                   </td>
-                  <td>
+                  <td data-label="행 수">
                     {job.processed_rows.toLocaleString()} / {job.total_rows.toLocaleString()}
                   </td>
-                  <td>{job.progress_percent.toFixed(2)}%</td>
-                  <td>{formatDateTime(job.created_at)}</td>
-                  <td>
+                  <td data-label="진행률">{job.progress_percent.toFixed(2)}%</td>
+                  <td data-label="조회시작 일시">{formatDateTime(job.created_at)}</td>
+                  <td data-label="다운로드">
                     {job.can_download ? (
                       <button type="button" className="nav-item" disabled={props.deleting} onClick={() => props.onDownload(job)}>
                         다운로드
@@ -83,7 +83,7 @@ export function BulkJobTable(props: Props) {
                       "-"
                     )}
                   </td>
-                  <td className="checkbox-col">
+                  <td className="checkbox-col" data-label="선택">
                     <input
                       type="checkbox"
                       aria-label={`${job.file_name} 선택`}

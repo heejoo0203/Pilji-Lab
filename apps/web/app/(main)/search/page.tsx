@@ -395,7 +395,7 @@ function SearchPageClient() {
         {rows.length === 0 ? (
           <p className="hint">검색 결과가 없습니다.</p>
         ) : (
-          <table className="data-table">
+          <table className="data-table mobile-card-table">
             <thead>
               <tr>
                 <th>가격기준년도</th>
@@ -410,13 +410,13 @@ function SearchPageClient() {
             <tbody>
               {rows.map((row, idx) => (
                 <tr key={`${row.토지소재지}-${idx}`}>
-                  <td>{row.기준년도}</td>
-                  <td>{row.토지소재지}</td>
-                  <td>{row.지번}</td>
-                  <td>{row.개별공시지가}</td>
-                  <td>{row.기준일자}</td>
-                  <td>{row.공시일자}</td>
-                  <td>{row.비고}</td>
+                  <td data-label="가격기준년도">{row.기준년도}</td>
+                  <td data-label="토지소재지">{row.토지소재지}</td>
+                  <td data-label="지번">{row.지번}</td>
+                  <td data-label="개별공시지가">{row.개별공시지가}</td>
+                  <td data-label="기준일자">{row.기준일자}</td>
+                  <td data-label="공시일자">{row.공시일자}</td>
+                  <td data-label="비고">{row.비고}</td>
                 </tr>
               ))}
             </tbody>

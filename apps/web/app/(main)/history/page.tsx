@@ -63,7 +63,7 @@ export default function HistoryPage() {
       {records.length === 0 ? (
         <p className="hint">아직 저장된 개별조회 기록이 없습니다.</p>
       ) : (
-        <table className="data-table history-table">
+        <table className="data-table history-table mobile-card-table">
           <thead>
             <tr>
               <th>순번</th>
@@ -75,16 +75,16 @@ export default function HistoryPage() {
           </thead>
           <tbody>
             {records.map((row, idx) => (
-              <tr
-                key={row.id}
-                onClick={() => router.push(`/search?recordId=${row.id}`)}
-                style={{ cursor: "pointer" }}
-              >
-                <td>{idx + 1}</td>
-                <td>{formatKST(row.created_at)}</td>
-                <td>{toSearchTypeLabel(row.search_type)}</td>
-                <td>{row.address_summary}</td>
-                <td>{row.result_count}</td>
+                <tr
+                  key={row.id}
+                  onClick={() => router.push(`/search?recordId=${row.id}`)}
+                  style={{ cursor: "pointer" }}
+                >
+                <td data-label="순번">{idx + 1}</td>
+                <td data-label="일시">{formatKST(row.created_at)}</td>
+                <td data-label="유형">{toSearchTypeLabel(row.search_type)}</td>
+                <td data-label="주소">{row.address_summary}</td>
+                <td data-label="결과건수">{row.result_count}</td>
               </tr>
             ))}
           </tbody>
