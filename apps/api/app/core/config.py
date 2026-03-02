@@ -36,6 +36,7 @@ class Settings(BaseSettings):
         default="autoLV/1.0 (+https://auto-lv.vercel.app)",
         alias="VWORLD_USER_AGENT",
     )
+    vworld_referer: str = Field(default="https://auto-lv.vercel.app", alias="VWORLD_REFERER")
     vworld_proxy_url: str = Field(default="", alias="VWORLD_PROXY_URL")
     vworld_proxy_token: str = Field(default="", alias="VWORLD_PROXY_TOKEN")
     road_name_file_path: str = Field(default="", alias="ROAD_NAME_FILE_PATH")

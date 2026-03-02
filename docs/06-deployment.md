@@ -36,8 +36,10 @@ COOKIE_SAMESITE=none
 VWORLD_API_BASE_URL=https://api.vworld.kr
 VWORLD_API_DOMAIN=api.autolv.example.com
 VWORLD_TIMEOUT_SECONDS=15
+VWORLD_USER_AGENT=Mozilla/5.0
+VWORLD_REFERER=https://autolv.example.com
 VWORLD_API_KEY=your-real-key
-VWORLD_PROXY_URL=https://autolv.example.com/api/vworld-proxy
+VWORLD_PROXY_URL=http://<EC2_ELASTIC_IP>:8080/vworld-proxy
 VWORLD_PROXY_TOKEN=replace-with-strong-shared-token
 ROAD_NAME_FILE_PATH=
 LD_CODE_FILE_PATH=
@@ -55,6 +57,7 @@ NEXT_PUBLIC_API_BASE_URL=https://api.autolv.example.com
 VWORLD_API_BASE_URL=https://api.vworld.kr
 VWORLD_API_DOMAIN=https://autolv.example.com
 VWORLD_API_KEY=your-real-key
+VWORLD_REFERER=https://autolv.example.com
 VWORLD_PROXY_TOKEN=replace-with-strong-shared-token
 ```
 
@@ -105,7 +108,21 @@ docker compose -f docker-compose.v1.yml up --build
 - API: `http://localhost:8000`
 - PostgreSQL: `localhost:5432`
 
-## 8. 운영 점검 절차 (배포 직후)
+## 8. 고정 IP 프록시 (권장)
+Railway/Vercel 환경에서 VWorld 직접 호출이 `502`로 불안정하면, 서울 리전 EC2 고정 IP 프록시를 사용한다.
+
+구현 위치:
+- `infra/vworld-proxy`
+- 실행 가이드: `infra/vworld-proxy/README.md`
+
+요약 절차:
+1. AWS EC2(Seoul) + Elastic IP 생성
+2. `infra/vworld-proxy` 배포 및 systemd 등록
+3. Railway API env에 `VWORLD_PROXY_URL`, `VWORLD_PROXY_TOKEN` 반영
+4. Railway 재배포 후 `/api/v1/land/single` 재검증
+5. 필요 시 VWorld에 고정 IP 화이트리스트 요청
+
+## 9. 운영 점검 절차 (배포 직후)
 1. `GET /health` 200 확인
 2. 회원가입/로그인/로그아웃 동작 확인
 3. 프로필 수정/비밀번호 변경/회원 탈퇴 동작 확인
@@ -120,7 +137,7 @@ docker compose -f docker-compose.v1.yml up --build
   - Web 도메인에서 로그인 유지
   - `HttpOnly`, `Secure`, `SameSite=None` 확인
 
-## 9. 백업/복구
+## 10. 백업/복구
 운영 기준 핵심 보존 대상:
 - PostgreSQL DB 덤프
 - `apps/api/storage/bulk/`
@@ -130,7 +147,7 @@ docker compose -f docker-compose.v1.yml up --build
 - 일 1회 정기 백업
 - 배포 직전 수동 백업 1회
 
-## 10. 롤백 전략
+## 11. 롤백 전략
 1. API/Web를 직전 태그로 롤백
 2. 필요 시 DB를 직전 백업으로 복원
 3. `/health`, 인증, 개별조회, 파일조회 시나리오 재검증

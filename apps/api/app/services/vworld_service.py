@@ -302,6 +302,7 @@ def _parse_int(value: str, field_name: str, allow_zero: bool) -> int:
 
 def call_vworld_json(path: str, params: dict[str, str]) -> dict[str, Any]:
     direct_error: HTTPException | None = None
+    proxy_error: HTTPException | None = None
 
     try:
         return _call_vworld_direct(path, params)
@@ -311,9 +312,27 @@ def call_vworld_json(path: str, params: dict[str, str]) -> dict[str, Any]:
     if settings.vworld_proxy_url.strip():
         try:
             return _call_vworld_proxy(path, params)
-        except HTTPException:
-            pass
+        except HTTPException as exc:
+            proxy_error = exc
 
+    if direct_error is not None and proxy_error is not None:
+        direct_code, direct_message = _extract_error_detail(direct_error)
+        proxy_code, proxy_message = _extract_error_detail(proxy_error)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "VWORLD_DIRECT_AND_PROXY_FAILED",
+                "message": (
+                    f"직접 호출 실패({direct_code}): {direct_message} / "
+                    f"프록시 호출 실패({proxy_code}): {proxy_message}"
+                ),
+                "direct": {"code": direct_code, "message": direct_message},
+                "proxy": {"code": proxy_code, "message": proxy_message},
+            },
+        )
+
+    if proxy_error is not None:
+        raise proxy_error
     if direct_error is not None:
         raise direct_error
 
@@ -330,14 +349,18 @@ def _call_vworld_direct(path: str, params: dict[str, str]) -> dict[str, Any]:
 
     query = urlencode(merged, doseq=True)
     url = f"{settings.vworld_api_base_url.rstrip('/')}{path}?{query}"
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": settings.vworld_user_agent,
+        "Connection": "close",
+    }
+    if settings.vworld_referer.strip():
+        headers["Referer"] = settings.vworld_referer.strip()
+
     try:
         response = _get_vworld_session().get(
             url,
-            headers={
-                "Accept": "application/json",
-                "User-Agent": settings.vworld_user_agent,
-                "Connection": "close",
-            },
+            headers=headers,
             timeout=settings.vworld_timeout_seconds,
         )
     except requests.RequestException as exc:
@@ -374,6 +397,8 @@ def _call_vworld_proxy(path: str, params: dict[str, str]) -> dict[str, Any]:
         "Content-Type": "application/json",
         "User-Agent": settings.vworld_user_agent,
     }
+    if settings.vworld_referer.strip():
+        headers["x-vworld-referer"] = settings.vworld_referer.strip()
     if settings.vworld_proxy_token.strip():
         headers["x-vworld-proxy-token"] = settings.vworld_proxy_token.strip()
 
@@ -415,9 +440,10 @@ def _get_vworld_session() -> requests.Session:
         connect=max(0, settings.vworld_retry_count),
         read=max(0, settings.vworld_retry_count),
         status=max(0, settings.vworld_retry_count),
+        other=max(0, settings.vworld_retry_count),
         backoff_factor=max(0.0, settings.vworld_retry_backoff_seconds),
         status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=frozenset(["GET"]),
+        allowed_methods=frozenset(["GET", "POST"]),
         raise_on_status=False,
     )
     adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=20)
@@ -427,3 +453,12 @@ def _get_vworld_session() -> requests.Session:
     session.mount("https://", adapter)
     _VWORLD_SESSION = session
     return session
+
+
+def _extract_error_detail(exc: HTTPException) -> tuple[str, str]:
+    detail = exc.detail
+    if isinstance(detail, dict):
+        return str(detail.get("code", exc.status_code)), str(detail.get("message", detail))
+    if isinstance(detail, str):
+        return str(exc.status_code), detail
+    return str(exc.status_code), str(detail)

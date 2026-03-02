@@ -6,6 +6,7 @@ type ProxyPayload = {
 };
 
 const DEFAULT_VWORLD_BASE_URL = "https://api.vworld.kr";
+const DEFAULT_VWORLD_REFERER = "https://auto-lv.vercel.app";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
 
   const vworldBaseUrl = (process.env.VWORLD_API_BASE_URL?.trim() || DEFAULT_VWORLD_BASE_URL).replace(/\/+$/, "");
   const vworldDomain = process.env.VWORLD_API_DOMAIN?.trim() ?? "";
+  const vworldReferer = request.headers.get("x-vworld-referer") || process.env.VWORLD_REFERER?.trim() || DEFAULT_VWORLD_REFERER;
 
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(body.params ?? {})) {
@@ -51,6 +53,7 @@ export async function POST(request: NextRequest) {
       headers: {
         Accept: "application/json",
         "User-Agent": "autoLV-web-proxy/1.0",
+        Referer: vworldReferer,
         Connection: "close",
       },
     });
