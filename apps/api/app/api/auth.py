@@ -32,7 +32,8 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response) -> Response:
+def logout() -> Response:
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
     clear_auth_cookies(response)
     return response
 
@@ -80,11 +81,11 @@ def update_password(
 @router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
 def withdraw_account(
     payload: AccountDeleteRequest,
-    response: Response,
     access_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> Response:
     user = get_user_from_access_token(db, access_token)
     delete_account(db, user=user, confirmation_text=payload.confirmation_text)
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
     clear_auth_cookies(response)
     return response
