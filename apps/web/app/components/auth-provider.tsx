@@ -33,7 +33,7 @@ type AuthContextValue = {
     verification_code: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (payload: { full_name?: string; profile_image?: File | null }) => Promise<void>;
+  updateProfile: (payload: { full_name?: string; phone_number?: string; profile_image?: File | null }) => Promise<void>;
   changePassword: (payload: {
     current_password: string;
     new_password: string;
@@ -190,12 +190,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateProfile = async (payload: { full_name?: string; profile_image?: File | null }) => {
+  const updateProfile = async (payload: { full_name?: string; phone_number?: string; profile_image?: File | null }) => {
     setAuthLoading(true);
     try {
       const form = new FormData();
       if (payload.full_name !== undefined) {
         form.append("full_name", payload.full_name);
+      }
+      if (payload.phone_number !== undefined) {
+        form.append("phone_number", payload.phone_number);
       }
       if (payload.profile_image) {
         form.append("profile_image", payload.profile_image);

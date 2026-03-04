@@ -20,6 +20,7 @@ export default function MyPage() {
 
   const isLoggedIn = Boolean(user);
   const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [profileImage, setProfileImage] = useState<File | null>(null);
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -34,7 +35,8 @@ export default function MyPage() {
   useEffect(() => {
     if (!isLoggedIn) return;
     setFullName(user?.full_name ?? "");
-  }, [isLoggedIn, user?.full_name]);
+    setPhoneNumber(user?.phone_number ?? "");
+  }, [isLoggedIn, user?.full_name, user?.phone_number]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -84,14 +86,25 @@ export default function MyPage() {
         <article className="mypage-card">
           <h3>회원 정보 수정</h3>
           <label className="field-label" htmlFor="mypage-name">
-            닉네임
+            이름
           </label>
           <input
             id="mypage-name"
             className="auth-input"
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
-            placeholder="닉네임"
+            placeholder="이름"
+          />
+
+          <label className="field-label" htmlFor="mypage-phone">
+            연락처
+          </label>
+          <input
+            id="mypage-phone"
+            className="auth-input"
+            value={phoneNumber}
+            onChange={(event) => setPhoneNumber(event.target.value)}
+            placeholder="연락처 (숫자 또는 하이픈)"
           />
 
           <label className="field-label" htmlFor="mypage-image">
@@ -111,7 +124,7 @@ export default function MyPage() {
             disabled={authLoading}
             onClick={async () => {
               setLocalMessage("");
-              await updateProfile({ full_name: fullName, profile_image: profileImage });
+              await updateProfile({ full_name: fullName, phone_number: phoneNumber, profile_image: profileImage });
               setProfileImage(null);
             }}
           >

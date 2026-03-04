@@ -48,6 +48,7 @@ from app.schemas.auth import (
     ResetPasswordByCodeRequest,
     TermsResponse,
     UserOut,
+    normalize_phone_number,
     validate_nickname,
     validate_password_policy,
 )
@@ -186,6 +187,7 @@ def update_profile(
     *,
     user: User,
     full_name: str | None,
+    phone_number: str | None,
     profile_image_filename: str | None,
     profile_image_bytes: bytes | None,
 ) -> User:
@@ -194,6 +196,11 @@ def update_profile(
         cleaned_name = full_name.strip()
         validate_nickname(cleaned_name)
         user.full_name = cleaned_name
+        changed = True
+
+    if phone_number is not None:
+        cleaned_phone = normalize_phone_number(phone_number)
+        user.phone_number = cleaned_phone
         changed = True
 
     if profile_image_filename is not None:

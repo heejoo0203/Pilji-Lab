@@ -97,6 +97,7 @@ def current_terms() -> TermsResponse:
 @router.patch("/profile", response_model=UserOut)
 async def edit_profile(
     full_name: str | None = Form(default=None),
+    phone_number: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     access_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
@@ -108,6 +109,7 @@ async def edit_profile(
         db,
         user=user,
         full_name=full_name,
+        phone_number=phone_number,
         profile_image_filename=image_name,
         profile_image_bytes=image_bytes,
     )
