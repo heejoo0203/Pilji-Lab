@@ -200,7 +200,7 @@ export default function MyPage() {
           </p>
           <a
             className="btn-primary full"
-            href="/downloads/autoLV-android-release.apk"
+            href="/downloads/autoLV-android-release-v2.1.2.apk"
             download
             target="_blank"
             rel="noopener noreferrer"
