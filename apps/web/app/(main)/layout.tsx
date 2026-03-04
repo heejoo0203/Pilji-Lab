@@ -159,6 +159,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <Link href="/features">기능설명</Link>
         <span>·</span>
         <Link href="/privacy">개인정보처리방침</Link>
+        <span>·</span>
+        <Link href="/account-deletion">계정삭제 안내</Link>
       </footer>
     </div>
   );

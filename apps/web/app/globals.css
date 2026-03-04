@@ -463,6 +463,13 @@ body::before {
   line-height: 1.7;
 }
 
+.privacy-ordered-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #334155;
+  line-height: 1.7;
+}
+
 .hero-lite {
   border: 1px solid #d5ddeb;
   border-radius: 22px;

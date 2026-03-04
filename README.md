@@ -161,6 +161,8 @@ python scripts/reset_db_and_seed_admin.py
 - 릴리즈 노트(v1): `docs/07-release-notes-v1.0.0.md`
 - 포트폴리오/운영 개선: `docs/08-portfolio-enhancement.md`
 - 기능 상세: `docs/feature-spec.md`
+- 개인정보처리방침: `https://auto-lv.vercel.app/privacy`
+- 계정삭제 안내(Play Console 제출용): `https://auto-lv.vercel.app/account-deletion`
 
 ## 레포 구조
 ```text

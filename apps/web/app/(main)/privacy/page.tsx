@@ -79,8 +79,10 @@ export default function PrivacyPolicyPage() {
           <br />
           문의: <a href="mailto:kr.autolv@gmail.com">kr.autolv@gmail.com</a>
         </p>
+        <p className="hint">
+          계정 삭제 요청 절차는 <a href="/account-deletion">계정삭제 안내</a> 페이지에서 확인할 수 있습니다.
+        </p>
       </section>
     </>
   );
 }
-
