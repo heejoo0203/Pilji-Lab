@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { ProfileActionModal, type ProfileActionMode } from "@/app/components/profile-action-modal";
 import { useAuth } from "@/app/components/auth-provider";
+import type { UserTerms } from "@/app/lib/types";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -17,6 +18,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     updateProfile,
     changePassword,
     deleteAccount,
+    loadTerms,
     expectedWithdrawalText,
     authLoading,
     authMessage,
@@ -24,6 +26,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [profileOpen, setProfileOpen] = useState(false);
   const [actionMode, setActionMode] = useState<ProfileActionMode>("profile");
   const [actionOpen, setActionOpen] = useState(false);
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [terms, setTerms] = useState<UserTerms | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const isLoggedIn = Boolean(user);
@@ -51,6 +55,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     setActionMode(mode);
     setActionOpen(true);
     setProfileOpen(false);
+    if (mode === "terms") {
+      setTermsLoading(true);
+      void loadTerms()
+        .then((result) => setTerms(result))
+        .finally(() => setTermsLoading(false));
+    }
   };
 
   return (
@@ -109,6 +119,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <button className="profile-action" type="button" onClick={() => openProfileAction("password")}>
                   비밀번호 변경
                 </button>
+                <button className="profile-action" type="button" onClick={() => openProfileAction("terms")}>
+                  서비스 약관
+                </button>
                 <button className="profile-action" type="button" onClick={() => openProfileAction("withdraw")}>
                   회원 탈퇴
                 </button>
@@ -143,6 +156,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         mode={actionMode}
         user={user}
         authLoading={authLoading}
+        termsLoading={termsLoading}
+        terms={terms}
         message={authMessage}
         expectedWithdrawalText={expectedWithdrawalText}
         onClose={() => setActionOpen(false)}

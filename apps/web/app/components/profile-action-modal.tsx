@@ -2,15 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import type { AuthUser } from "@/app/lib/types";
+import type { AuthUser, UserTerms } from "@/app/lib/types";
 
-export type ProfileActionMode = "profile" | "password" | "withdraw";
+export type ProfileActionMode = "profile" | "password" | "terms" | "withdraw";
 
 type Props = {
   open: boolean;
   mode: ProfileActionMode;
   user: AuthUser | null;
   authLoading: boolean;
+  termsLoading: boolean;
+  terms: UserTerms | null;
   message: string;
   expectedWithdrawalText: string;
   onClose: () => void;
@@ -44,6 +46,7 @@ export function ProfileActionModal(props: Props) {
   const title = useMemo(() => {
     if (props.mode === "profile") return "회원 정보 수정";
     if (props.mode === "password") return "비밀번호 변경";
+    if (props.mode === "terms") return "서비스 약관";
     return "회원 탈퇴";
   }, [props.mode]);
 
@@ -151,6 +154,25 @@ export function ProfileActionModal(props: Props) {
       );
     }
 
+    if (props.mode === "terms") {
+      return (
+        <div className="profile-modal-grid">
+          {props.termsLoading ? <p className="hint">약관 불러오는 중...</p> : null}
+          {!props.termsLoading && props.terms ? (
+            <>
+              <p className="hint">
+                동의 버전: <strong>{props.terms.version}</strong>
+                <br />
+                동의 일시: {props.terms.accepted_at ? new Date(props.terms.accepted_at).toLocaleString("ko-KR") : "-"}
+              </p>
+              <pre className="terms-content-box">{props.terms.content}</pre>
+            </>
+          ) : null}
+          {!props.termsLoading && !props.terms ? <p className="hint">약관 정보를 불러오지 못했습니다.</p> : null}
+        </div>
+      );
+    }
+
     return (
       <div className="profile-modal-grid">
         <p className="danger-guide">
@@ -194,4 +216,3 @@ export function ProfileActionModal(props: Props) {
     </div>
   );
 }
-

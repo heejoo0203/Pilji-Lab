@@ -10,6 +10,12 @@ export type AuthUser = {
   profile_image_url?: string | null;
 };
 
+export type UserTerms = {
+  version: string;
+  content: string;
+  accepted_at: string | null;
+};
+
 export type SearchTab = "지번" | "도로명";
 
 export type LdMap = Record<string, Record<string, Record<string, string>>>;

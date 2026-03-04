@@ -2,10 +2,12 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-import type { AuthMode, AuthUser } from "@/app/lib/types";
+import type { AuthMode, AuthUser, UserTerms } from "@/app/lib/types";
 
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
 let preferredApiBase: string | null = null;
+
+type RecoveryPurpose = "signup" | "find_id" | "reset_password";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -24,6 +26,8 @@ type AuthContextValue = {
     password: string;
     confirm_password: string;
     agreements: boolean;
+    verification_id: string;
+    verification_code: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (payload: { full_name?: string; profile_image?: File | null }) => Promise<void>;
@@ -36,6 +40,25 @@ type AuthContextValue = {
   expectedWithdrawalText: string;
   setAuthMessage: (message: string) => void;
   refreshMe: () => Promise<AuthUser | null>;
+  sendRecoveryCode: (payload: {
+    purpose: RecoveryPurpose;
+    email: string;
+    full_name?: string;
+  }) => Promise<{
+    verification_id: string;
+    expires_in_seconds: number;
+    message: string;
+    debug_code?: string | null;
+  }>;
+  findIdByCode: (payload: { verification_id: string; code: string }) => Promise<{ email: string }>;
+  resetPasswordByCode: (payload: {
+    email: string;
+    verification_id: string;
+    code: string;
+    new_password: string;
+    confirm_new_password: string;
+  }) => Promise<string>;
+  loadTerms: () => Promise<UserTerms>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -54,12 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) {
         setUser(null);
         return null;
-      } else {
-        const data = (await res.json()) as AuthUser;
-        const normalized = normalizeUser(data);
-        setUser(normalized);
-        return normalized;
       }
+      const data = (await res.json()) as AuthUser;
+      const normalized = normalizeUser(data);
+      setUser(normalized);
+      return normalized;
     } catch {
       setUser(null);
       return null;
@@ -104,6 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string;
     confirm_password: string;
     agreements: boolean;
+    verification_id: string;
+    verification_code: string;
   }) => {
     setAuthLoading(true);
     try {
@@ -123,7 +147,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setAuthLoading(true);
-    // Optimistically update UI first so logout feels instant.
     setUser(null);
     setAuthMode("login");
     setAuthOpen(false);
@@ -143,11 +166,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             break;
           }
         } catch {
-          // Ignore and try the next base.
+          // next base
         }
       }
-    } catch {
-      remoteSuccess = false;
     } finally {
       setAuthMessage(remoteSuccess ? "로그아웃되었습니다." : "서버 연결 문제로 로컬 로그아웃 처리되었습니다.");
       setAuthLoading(false);
@@ -216,6 +237,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const sendRecoveryCode = async (payload: {
+    purpose: RecoveryPurpose;
+    email: string;
+    full_name?: string;
+  }) => {
+    const res = await authFetch("/api/v1/auth/recovery/send-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await safeJson(res)) as
+      | { verification_id: string; expires_in_seconds: number; message: string; debug_code?: string }
+      | { detail?: unknown };
+    if (!res.ok) throw new Error(extractError(body, "인증 코드 발송에 실패했습니다."));
+    return body as { verification_id: string; expires_in_seconds: number; message: string; debug_code?: string };
+  };
+
+  const findIdByCode = async (payload: { verification_id: string; code: string }) => {
+    const res = await authFetch("/api/v1/auth/recovery/find-id", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await safeJson(res)) as { email: string } | { detail?: unknown };
+    if (!res.ok) throw new Error(extractError(body, "아이디 찾기에 실패했습니다."));
+    return body as { email: string };
+  };
+
+  const resetPasswordByCode = async (payload: {
+    email: string;
+    verification_id: string;
+    code: string;
+    new_password: string;
+    confirm_new_password: string;
+  }) => {
+    const res = await authFetch("/api/v1/auth/recovery/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await safeJson(res)) as { message?: string; detail?: unknown };
+    if (!res.ok) throw new Error(extractError(body, "비밀번호 재설정에 실패했습니다."));
+    return body.message ?? "비밀번호가 재설정되었습니다.";
+  };
+
+  const loadTerms = async () => {
+    const res = await authFetch("/api/v1/auth/terms", { method: "GET" });
+    const body = (await safeJson(res)) as UserTerms | { detail?: unknown };
+    if (!res.ok) throw new Error(extractError(body, "약관 조회에 실패했습니다."));
+    return body as UserTerms;
+  };
+
   const expectedWithdrawalText = useMemo(() => {
     const nickname = (user?.full_name ?? user?.email?.split("@")[0] ?? "").trim();
     return nickname ? `${nickname} 탈퇴를 동의합니다` : "";
@@ -241,6 +314,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       expectedWithdrawalText,
       setAuthMessage,
       refreshMe,
+      sendRecoveryCode,
+      findIdByCode,
+      resetPasswordByCode,
+      loadTerms,
     }),
     [user, loading, authLoading, authOpen, authMode, authMessage, expectedWithdrawalText]
   );
@@ -292,10 +369,7 @@ function resolveApiBases(): string[] {
   const isBrowser = typeof window !== "undefined";
   const hostname = isBrowser ? window.location.hostname.toLowerCase() : "";
   const hasProxy = Boolean(envBase);
-  const isLocalHost =
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname.endsWith(".local");
+  const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".local");
 
   if (preferredApiBase) {
     bases.push(normalizeBase(preferredApiBase));

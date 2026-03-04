@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
@@ -31,6 +32,8 @@ class RegisterRequest(BaseModel):
     confirm_password: str = Field(min_length=8, max_length=16)
     full_name: str = Field(min_length=2, max_length=20)
     agreements: bool
+    verification_id: str = Field(min_length=36, max_length=36)
+    verification_code: str = Field(min_length=6, max_length=6)
 
     @field_validator("full_name")
     @classmethod
@@ -47,6 +50,13 @@ class RegisterRequest(BaseModel):
     def validate_confirm_password_bytes(cls, value: str) -> str:
         if len(value.encode("utf-8")) > 72:
             raise ValueError("비밀번호 확인 값은 UTF-8 기준 72바이트를 넘을 수 없습니다.")
+        return value
+
+    @field_validator("verification_code")
+    @classmethod
+    def validate_verification_code(cls, value: str) -> str:
+        if not re.fullmatch(r"[0-9]{6}", value or ""):
+            raise ValueError("인증 코드는 6자리 숫자여야 합니다.")
         return value
 
     @model_validator(mode="after")
@@ -87,6 +97,12 @@ class AuthResponse(BaseModel):
     full_name: str | None = None
 
 
+class TermsResponse(BaseModel):
+    version: str
+    content: str
+    accepted_at: datetime | None = None
+
+
 class PasswordChangeRequest(BaseModel):
     current_password: str = Field(min_length=8, max_length=16)
     new_password: str = Field(min_length=8, max_length=16)
@@ -120,3 +136,86 @@ class PasswordChangeRequest(BaseModel):
 
 class AccountDeleteRequest(BaseModel):
     confirmation_text: str = Field(min_length=1, max_length=100)
+
+
+class RecoveryPurpose:
+    SIGNUP = "signup"
+    FIND_ID = "find_id"
+    RESET_PASSWORD = "reset_password"
+
+
+class RecoveryCodeSendRequest(BaseModel):
+    purpose: str = Field(min_length=2, max_length=30)
+    email: EmailStr
+    full_name: str | None = Field(default=None, min_length=2, max_length=20)
+
+    @field_validator("purpose")
+    @classmethod
+    def validate_purpose(cls, value: str) -> str:
+        allowed = {RecoveryPurpose.SIGNUP, RecoveryPurpose.FIND_ID, RecoveryPurpose.RESET_PASSWORD}
+        if value not in allowed:
+            raise ValueError("지원하지 않는 인증 목적입니다.")
+        return value
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_optional_full_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_nickname(value)
+
+
+class RecoveryCodeSendResponse(BaseModel):
+    verification_id: str
+    expires_in_seconds: int
+    message: str
+    debug_code: str | None = None
+
+
+class FindIdCompleteRequest(BaseModel):
+    verification_id: str = Field(min_length=36, max_length=36)
+    code: str = Field(min_length=6, max_length=6)
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, value: str) -> str:
+        if not re.fullmatch(r"[0-9]{6}", value or ""):
+            raise ValueError("인증 코드는 6자리 숫자여야 합니다.")
+        return value
+
+
+class FindIdCompleteResponse(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordByCodeRequest(BaseModel):
+    email: EmailStr
+    verification_id: str = Field(min_length=36, max_length=36)
+    code: str = Field(min_length=6, max_length=6)
+    new_password: str = Field(min_length=8, max_length=16)
+    confirm_new_password: str = Field(min_length=8, max_length=16)
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, value: str) -> str:
+        if not re.fullmatch(r"[0-9]{6}", value or ""):
+            raise ValueError("인증 코드는 6자리 숫자여야 합니다.")
+        return value
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password_policy(cls, value: str) -> str:
+        return validate_password_policy(value, field_label="새 비밀번호")
+
+    @field_validator("confirm_new_password")
+    @classmethod
+    def validate_confirm_new_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("새 비밀번호 확인 값은 UTF-8 기준 72바이트를 넘을 수 없습니다.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_password_match(self) -> "ResetPasswordByCodeRequest":
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("새 비밀번호와 새 비밀번호 확인이 일치하지 않습니다.")
+        return self

@@ -52,6 +52,19 @@ class Settings(BaseSettings):
     map_price_cache_ttl_seconds: int = Field(default=86400, alias="MAP_PRICE_CACHE_TTL_SECONDS")
     map_nearby_radius_m: int = Field(default=200, alias="MAP_NEARBY_RADIUS_M")
 
+    email_verification_exp_minutes: int = Field(default=10, alias="EMAIL_VERIFICATION_EXP_MINUTES")
+    email_verification_max_attempts: int = Field(default=5, alias="EMAIL_VERIFICATION_MAX_ATTEMPTS")
+    email_debug_return_code: bool = Field(default=True, alias="EMAIL_DEBUG_RETURN_CODE")
+
+    mail_delivery_mode: str = Field(default="console", alias="MAIL_DELIVERY_MODE")
+    mail_from: str = Field(default="no-reply@autolv.local", alias="MAIL_FROM")
+    smtp_host: str = Field(default="", alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_user: str = Field(default="", alias="SMTP_USER")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
+
 
 def _normalize_database_url(database_url: str) -> str:
     value = (database_url or "").strip()

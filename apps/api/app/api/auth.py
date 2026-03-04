@@ -2,16 +2,33 @@ from fastapi import APIRouter, Cookie, Depends, File, Form, UploadFile, Response
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.auth import AccountDeleteRequest, AuthResponse, LoginRequest, PasswordChangeRequest, RegisterRequest, UserOut
+from app.schemas.auth import (
+    AccountDeleteRequest,
+    AuthResponse,
+    FindIdCompleteRequest,
+    FindIdCompleteResponse,
+    LoginRequest,
+    PasswordChangeRequest,
+    RecoveryCodeSendRequest,
+    RecoveryCodeSendResponse,
+    RegisterRequest,
+    ResetPasswordByCodeRequest,
+    TermsResponse,
+    UserOut,
+)
 from app.services.auth_service import (
     attach_auth_cookies,
     build_user_out,
     change_password,
     clear_auth_cookies,
     delete_account,
+    find_id_by_code,
     get_user_from_access_token,
+    get_terms_for_user,
     login_user,
     register_user,
+    reset_password_by_code,
+    send_recovery_code,
     update_profile,
 )
 
@@ -45,6 +62,15 @@ def me(
 ) -> UserOut:
     user = get_user_from_access_token(db, access_token)
     return build_user_out(user)
+
+
+@router.get("/terms", response_model=TermsResponse)
+def terms(
+    access_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> TermsResponse:
+    user = get_user_from_access_token(db, access_token)
+    return get_terms_for_user(user)
 
 
 @router.patch("/profile", response_model=UserOut)
@@ -89,3 +115,20 @@ def withdraw_account(
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     clear_auth_cookies(response)
     return response
+
+
+@router.post("/recovery/send-code", response_model=RecoveryCodeSendResponse)
+def send_code(payload: RecoveryCodeSendRequest, db: Session = Depends(get_db)) -> RecoveryCodeSendResponse:
+    return send_recovery_code(db, payload)
+
+
+@router.post("/recovery/find-id", response_model=FindIdCompleteResponse)
+def find_id(payload: FindIdCompleteRequest, db: Session = Depends(get_db)) -> FindIdCompleteResponse:
+    email = find_id_by_code(db, payload)
+    return FindIdCompleteResponse(email=email)
+
+
+@router.post("/recovery/reset-password")
+def reset_password(payload: ResetPasswordByCodeRequest, db: Session = Depends(get_db)) -> dict[str, str]:
+    reset_password_by_code(db, payload)
+    return {"message": "비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요."}

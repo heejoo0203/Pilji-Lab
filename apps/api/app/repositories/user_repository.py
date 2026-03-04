@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -20,8 +22,18 @@ def create_user(
     email: str,
     password_hash: str,
     full_name: str | None,
+    terms_version: str,
+    terms_snapshot: str,
+    terms_accepted_at: datetime,
 ) -> User:
-    user = User(email=email, password_hash=password_hash, full_name=full_name)
+    user = User(
+        email=email,
+        password_hash=password_hash,
+        full_name=full_name,
+        terms_version=terms_version,
+        terms_snapshot=terms_snapshot,
+        terms_accepted_at=terms_accepted_at,
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

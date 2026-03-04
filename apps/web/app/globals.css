@@ -935,6 +935,32 @@ body::before {
   gap: 10px;
 }
 
+.verification-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.verification-row .nav-item {
+  border-color: #cfd9ea;
+  background: #f8fbff;
+  white-space: nowrap;
+}
+
+.terms-content-box {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d8e0ec;
+  border-radius: 10px;
+  background: #f8fafd;
+  color: #26384f;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-height: 360px;
+  overflow: auto;
+}
+
 .btn-link {
   border: none;
   background: transparent;
