@@ -155,6 +155,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       </header>
 
       <main className="content-wrap">{children}</main>
+      <footer className="site-footer">
+        <Link href="/features">기능설명</Link>
+        <span>·</span>
+        <Link href="/privacy">개인정보처리방침</Link>
+      </footer>
     </div>
   );
 }

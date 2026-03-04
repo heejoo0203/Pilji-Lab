@@ -493,7 +493,15 @@ export function AuthModal() {
                   onChange={(event) => setRegisterAgreements(event.target.checked)}
                 />
                 <span>
-                  [필수] 서비스 이용약관 확인 후{" "}
+                  [필수]{" "}
+                  <button type="button" className="btn-link agree-link" onClick={() => void onOpenTerms()}>
+                    서비스 이용약관
+                  </button>{" "}
+                  및{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="btn-link agree-link">
+                    개인정보처리방침
+                  </a>{" "}
+                  확인 후{" "}
                   <button type="button" className="btn-link agree-link" onClick={() => void onOpenTerms()}>
                     동의합니다
                   </button>
