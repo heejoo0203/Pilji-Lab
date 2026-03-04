@@ -1,10 +1,10 @@
-# 데이터 저장 구조 (v2.1.0 기준)
+# 데이터 저장 구조 (v2.2.0)
 
 ## 1. DB 런타임 구성
 - 로컬 개발 기본 DB: SQLite (`apps/api/autolv.db`)
 - 운영 배포 DB: PostgreSQL (Neon/Railway)
-- 공간 확장: PostgreSQL에서 `postgis` 확장 사용
-- 스키마 관리: Alembic (`apps/api/alembic/versions`)
+- 공간 확장: PostgreSQL `postgis` 확장 사용
+- 마이그레이션: Alembic (`apps/api/alembic/versions`)
 
 마이그레이션 이력:
 - `20260302_0001`: `users`, `bulk_jobs`
@@ -29,7 +29,23 @@
 - `created_at` (DateTime(timezone=True), NOT NULL)
 - `updated_at` (DateTime(timezone=True), NOT NULL)
 
-### 2.2 bulk_jobs
+### 2.2 email_verifications
+- `id` (String(36), PK)
+- `purpose` (String(30), NOT NULL, INDEX)  
+  허용: `signup | find_id | reset_password`
+- `email` (String(255), NOT NULL, INDEX)
+- `full_name` (String(100), NULL)
+- `code_hash` (String(128), NOT NULL)
+- `attempt_count` (Integer, NOT NULL)
+- `max_attempts` (Integer, NOT NULL)
+- `expires_at` (DateTime(timezone=True), NOT NULL, INDEX)
+- `verified_at` (DateTime(timezone=True), NULL)
+- `consumed_at` (DateTime(timezone=True), NULL)
+- `meta_json` (Text, NOT NULL)
+- `created_at` (DateTime(timezone=True), NOT NULL)
+- `updated_at` (DateTime(timezone=True), NOT NULL)
+
+### 2.3 bulk_jobs
 - `id` (String(36), PK)
 - `user_id` (String(36), FK -> `users.id`, NOT NULL, INDEX)
 - `file_name` (String(255), NOT NULL)
@@ -50,19 +66,18 @@
 - `completed`
 - `failed`
 
-### 2.3 query_logs
+### 2.4 query_logs
 - `id` (String(36), PK)
 - `user_id` (String(36), FK -> `users.id`, NOT NULL, INDEX)
 - `search_type` (String(10), NOT NULL)  
   허용: `jibun | road | map`
 - `pnu` (String(19), NOT NULL, INDEX)
 - `address_summary` (String(300), NOT NULL)
-- `rows_json` (Text, NOT NULL)  
-  조회 결과 행(JSON 문자열)
+- `rows_json` (Text, NOT NULL)
 - `result_count` (Integer, NOT NULL)
 - `created_at` (DateTime(timezone=True), NOT NULL, INDEX)
 
-### 2.4 parcels
+### 2.5 parcels
 - `id` (String(36), PK)
 - `pnu` (String(19), UNIQUE, NOT NULL, INDEX)
 - `lat` (Float, NOT NULL)
@@ -71,42 +86,28 @@
 - `price_current` (BigInteger, NULL)
 - `price_previous` (BigInteger, NULL)
 - `updated_at` (DateTime(timezone=True), NOT NULL)
-- `geog` (Geography POINT, 4326, PostgreSQL only)
-- `geom` (Geometry POLYGON, 4326, PostgreSQL only)
+- `geog` (Geography POINT, 4326, PostgreSQL 전용)
+- `geom` (Geometry POLYGON, 4326, PostgreSQL 전용)
 
 공간 인덱스(PostgreSQL):
 - `idx_parcels_geog_gist` (GIST on `geog`)
 - `idx_parcels_geom_gist` (GIST on `geom`)
 
-### 2.5 email_verifications
-- `id` (String(36), PK)
-- `purpose` (String(30), NOT NULL, INDEX)  
-  허용: `signup | find_id | reset_password`
-- `email` (String(255), NOT NULL, INDEX)
-- `full_name` (String(100), NULL)
-- `code_hash` (String(128), NOT NULL)
-- `attempt_count` (Integer, NOT NULL)
-- `max_attempts` (Integer, NOT NULL)
-- `expires_at` (DateTime(timezone=True), NOT NULL, INDEX)
-- `verified_at` (DateTime(timezone=True), NULL)
-- `consumed_at` (DateTime(timezone=True), NULL)
-- `meta_json` (Text, NOT NULL)
-- `created_at` (DateTime(timezone=True), NOT NULL)
-- `updated_at` (DateTime(timezone=True), NOT NULL)
-
-## 3. 저장소(파일) 구조
+## 3. 파일 저장소 구조
 - 대량조회 업로드/결과: `apps/api/storage/bulk`
 - 프로필 이미지: `apps/api/storage/profile_images`
 
-파일은 DB BLOB이 아닌 경로(`upload_path`, `result_path`, `profile_image_path`)로 관리한다.
+운영에서는 스토리지 볼륨 또는 외부 오브젝트 스토리지 연계를 권장한다.
 
-## 4. 조회기록 저장 정책
-- 로그인 사용자의 개별/지도 조회 기록은 `query_logs`에 서버 영구 저장된다.
-- 로그아웃 후 재로그인해도 기록이 유지된다.
-- 기록 UI 필터/정렬은 DB 조회 결과 기반으로 동작한다.
+## 4. 데이터 보존/삭제 정책
+- `query_logs`: 사용자 조회기록 영구 저장(회원 탈퇴 시 함께 삭제)
+- `bulk_jobs`: 사용자 작업 이력 저장(회원 탈퇴 시 파일 포함 삭제)
+- `email_verifications`: 인증 수명주기 테이블(만료/사용 완료 데이터 정리 권장)
+- `users`: 회원 탈퇴 시 관련 참조 데이터 정리 후 삭제
 
-## 5. 운영 체크 포인트
-1. `alembic_version` 테이블에서 `head` 적용 여부 확인
-2. `users.phone_number`, `users.terms_*` 컬럼 존재 확인
-3. `query_logs`, `email_verifications`, `parcels` 테이블 존재 확인
-4. PostgreSQL 환경에서 PostGIS 확장/공간 인덱스 생성 여부 확인
+## 5. 운영 체크포인트
+1. `alembic_version`이 `head`인지 확인
+2. 필수 테이블 존재 확인: `users`, `email_verifications`, `bulk_jobs`, `query_logs`, `parcels`
+3. PostgreSQL 환경에서 `postgis_version()` 확인
+4. `parcels` 인덱스(`idx_parcels_geog_gist`, `idx_parcels_geom_gist`) 존재 확인
+5. 관리자 계정 시드 필요 시 `scripts/reset_db_and_seed_admin.py` 실행

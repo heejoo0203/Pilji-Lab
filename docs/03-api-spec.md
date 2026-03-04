@@ -1,14 +1,9 @@
-# API 명세 (v2.1.0)
+# API 명세 (v2.2.0)
 
 기본 경로: `/api/v1`  
-인증: 쿠키 기반 JWT(`access_token`, `refresh_token`)
+인증: 쿠키 기반 JWT (`access_token`, `refresh_token`)
 
-## 0. VWorld 호출 정책
-- `/land/single`는 VWorld 직접 호출을 먼저 시도한다.
-- 직접 호출 실패 시 `VWORLD_PROXY_URL`이 설정되어 있으면 프록시 경로를 재시도한다.
-- 두 경로가 모두 실패하면 `VWORLD_DIRECT_AND_PROXY_FAILED`로 직접/프록시 실패 원인을 함께 반환한다.
-
-## 1. 공통 API
+## 0. 공통
 ### GET `/`
 응답 200:
 ```json
@@ -21,8 +16,11 @@
 { "status": "healthy" }
 ```
 
-## 2. 인증 API
+## 1. 인증 API (`/auth`)
 ### POST `/auth/register`
+설명:
+- 이메일 중복 확인 + 이메일 인증코드 검증 후 회원가입
+
 요청:
 ```json
 {
@@ -30,9 +28,9 @@
   "password": "Abcd1234!",
   "confirm_password": "Abcd1234!",
   "full_name": "홍길동",
-  "phone_number": "01012345678",
+  "phone_number": "010-1234-5678",
   "agreements": true,
-  "verification_id": "c4f4aa8c-5f52-4df3-b3e7-7f16abdf3f2c",
+  "verification_id": "uuid",
   "verification_code": "123456"
 }
 ```
@@ -46,14 +44,14 @@
 }
 ```
 
-검증 규칙:
-- `email`: 형식 검증 + 중복 불가
-- `password`: 8~16자, 영문/숫자/특수문자 포함, UTF-8 기준 72바이트 이하
-- `confirm_password`: `password`와 동일
-- `full_name`: 2~20자, 한글/영문/숫자만 허용(닉네임 규칙)
-- `phone_number`: 숫자/하이픈 허용, 서버에서 숫자만 정규화, 9~11자리
-- `agreements`: `true` 필수
-- `verification_id`, `verification_code`: 이메일 인증 코드 검증
+### GET `/auth/email-availability?email=user@example.com`
+응답 200:
+```json
+{
+  "email": "user@example.com",
+  "available": true
+}
+```
 
 ### POST `/auth/login`
 요청:
@@ -74,10 +72,11 @@
 ```
 
 비고:
-- 성공 시 HttpOnly 쿠키(`access_token`, `refresh_token`)가 설정된다.
+- 성공 시 HttpOnly 쿠키를 설정한다.
 
 ### POST `/auth/logout`
-응답 204 (쿠키 삭제)
+응답 204:
+- 본문 없음, 인증 쿠키 삭제
 
 ### GET `/auth/me`
 응답 200:
@@ -89,40 +88,56 @@
   "phone_number": "01012345678",
   "role": "user",
   "auth_provider": "local",
-  "profile_image_url": "/media/profile/ab12cd34ef56.png"
+  "profile_image_url": "/media/profile/abc123.png"
 }
 ```
 
-### GET `/auth/email-availability?email=user@example.com`
+### GET `/auth/terms`
 설명:
-- 회원가입용 이메일 중복 확인 API
+- 로그인 사용자가 동의한 약관 버전/본문/동의시각 반환
 
 응답 200:
 ```json
 {
-  "email": "user@example.com",
-  "available": true
+  "version": "2026-03-05-v1",
+  "content": "[autoLV 서비스 이용약관] ...",
+  "accepted_at": "2026-03-05T06:31:15+00:00"
+}
+```
+
+### GET `/auth/terms/current`
+설명:
+- 비로그인(회원가입 화면 포함)에서 현재 약관 본문 조회
+
+응답 200:
+```json
+{
+  "version": "2026-03-05-v1",
+  "content": "[autoLV 서비스 이용약관] ...",
+  "accepted_at": null
 }
 ```
 
 ### PATCH `/auth/profile`
 설명:
-- 닉네임과 프로필 사진을 수정한다.
+- 이름/연락처/프로필 이미지를 수정
 
 요청:
 - `multipart/form-data`
-  - `full_name` (옵션): 닉네임
-  - `profile_image` (옵션): png/jpg/jpeg/webp, 최대 5MB
+  - `full_name` (옵션)
+  - `phone_number` (옵션)
+  - `profile_image` (옵션, png/jpg/jpeg/webp, 최대 5MB)
 
 응답 200:
 ```json
 {
   "id": "uuid",
   "email": "user@example.com",
-  "full_name": "새닉네임",
+  "full_name": "홍길동",
+  "phone_number": "01012345678",
   "role": "user",
   "auth_provider": "local",
-  "profile_image_url": "/media/profile/f0e1d2c3b4a5.webp"
+  "profile_image_url": "/media/profile/abc123.webp"
 }
 ```
 
@@ -138,52 +153,25 @@
 
 응답 200:
 ```json
-{
-  "message": "비밀번호가 변경되었습니다."
-}
+{ "message": "비밀번호가 변경되었습니다." }
 ```
 
 ### DELETE `/auth/account`
 설명:
-- 확인 문구를 정확히 입력해야 탈퇴할 수 있다.
+- `[이름] 탈퇴를 동의합니다` 문구를 정확히 입력해야 탈퇴 가능
 
 요청:
 ```json
-{
-  "confirmation_text": "홍길동 탈퇴를 동의합니다"
-}
+{ "confirmation_text": "홍길동 탈퇴를 동의합니다" }
 ```
 
 응답 204:
 - 본문 없음
 
-### GET `/auth/terms`
-설명:
-- 로그인 사용자가 동의한 약관 버전/본문/동의시각을 조회한다.
-
-응답 200:
-```json
-{
-  "version": "2026-03-05-v1",
-  "content": "[autoLV 서비스 이용약관] ...",
-  "accepted_at": "2026-03-05T06:31:15.000000+00:00"
-}
-```
-
-### GET `/auth/terms/current`
-설명:
-- 비로그인(회원가입 화면 포함)에서 현재 약관 본문을 조회한다.
-
-응답 200:
-```json
-{
-  "version": "2026-03-05-v1",
-  "content": "[autoLV 서비스 이용약관] ...",
-  "accepted_at": null
-}
-```
-
 ### POST `/auth/recovery/send-code`
+설명:
+- 회원가입/아이디찾기/비밀번호재설정 인증코드 발송
+
 요청:
 ```json
 {
@@ -195,7 +183,7 @@
 응답 200:
 ```json
 {
-  "verification_id": "c4f4aa8c-5f52-4df3-b3e7-7f16abdf3f2c",
+  "verification_id": "uuid",
   "expires_in_seconds": 600,
   "message": "인증 코드가 발송되었습니다.",
   "debug_code": null
@@ -204,11 +192,10 @@
 
 비고:
 - `purpose`: `signup | find_id | reset_password`
-- 운영에서는 `debug_code`가 `null`이어야 한다(`EMAIL_DEBUG_RETURN_CODE=false` 권장).
 
 ### POST `/auth/recovery/find-id/profile`
 설명:
-- 이름 + 연락처로 가입 이메일을 찾고 마스킹된 이메일만 반환한다.
+- 이름+연락처로 마스킹 이메일 반환
 
 요청:
 ```json
@@ -220,9 +207,24 @@
 
 응답 200:
 ```json
+{ "masked_email": "he***03@naver.com" }
+```
+
+### POST `/auth/recovery/find-id`
+설명:
+- 코드 검증 기반 이메일 조회(내부/확장용)
+
+요청:
+```json
 {
-  "masked_email": "he***03@naver.com"
+  "verification_id": "uuid",
+  "code": "123456"
 }
+```
+
+응답 200:
+```json
+{ "email": "user@example.com" }
 ```
 
 ### POST `/auth/recovery/reset-password`
@@ -230,7 +232,7 @@
 ```json
 {
   "email": "user@example.com",
-  "verification_id": "c4f4aa8c-5f52-4df3-b3e7-7f16abdf3f2c",
+  "verification_id": "uuid",
   "code": "123456",
   "new_password": "NewPass456!",
   "confirm_new_password": "NewPass456!"
@@ -239,14 +241,12 @@
 
 응답 200:
 ```json
-{
-  "message": "비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요."
-}
+{ "message": "비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요." }
 ```
 
-## 3. 개별공시지가 API
+## 2. 개별조회 API (`/land`)
 ### POST `/land/single`
-지번 검색 요청:
+지번 검색 요청 예시:
 ```json
 {
   "search_type": "jibun",
@@ -257,7 +257,7 @@
 }
 ```
 
-도로명 검색 요청:
+도로명 검색 요청 예시:
 ```json
 {
   "search_type": "road",
@@ -291,8 +291,7 @@
 
 ### GET `/land/road-initials`
 쿼리:
-- `sido`: 시/도
-- `sigungu`: 시/군/구
+- `sido`, `sigungu`
 
 응답 200:
 ```json
@@ -305,9 +304,7 @@
 
 ### GET `/land/road-names`
 쿼리:
-- `sido`: 시/도
-- `sigungu`: 시/군/구
-- `initial`: 초성
+- `sido`, `sigungu`, `initial`
 
 응답 200:
 ```json
@@ -319,13 +316,10 @@
 }
 ```
 
-## 4. 파일조회 API (v1)
-인증: 로그인 필수(`credentials: include`)
+## 3. 파일조회 API (`/bulk`)
+인증: 로그인 필수
 
 ### GET `/bulk/guide`
-설명:
-- 파일조회 안내/권장 컬럼 메타 정보를 반환한다.
-
 응답 200:
 ```json
 {
@@ -335,32 +329,26 @@
   "recommended_road": ["시도", "시군구", "도로명", "건물본번", "건물부번"],
   "alias_examples": {
     "시도": ["시도", "시/도"],
-    "본번": ["본번", "지번본번"],
-    "주소": ["주소", "소재지"]
+    "본번": ["본번", "주번"],
+    "주소": ["주소", "전체주소"]
   }
 }
 ```
 
 ### GET `/bulk/template`
 설명:
-- 표준 양식 엑셀 파일(`autolv_bulk_template.xlsx`)을 다운로드한다.
-
-응답 200:
-- `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- 표준 양식(`autolv_bulk_template.xlsx`) 다운로드
 
 ### POST `/bulk/jobs`
-설명:
-- 업로드 파일로 비동기 작업을 생성한다.
-
 요청:
 - `multipart/form-data`
-  - `file`: `.xlsx`, `.xls`, `.csv`
-  - `address_mode`: `auto | jibun | road` (기본값 `auto`)
+  - `file`: `.xlsx | .xls | .csv`
+  - `address_mode`: `auto | jibun | road` (기본 `auto`)
 
 응답 202:
 ```json
 {
-  "job_id": "8f31f6b1-5d7a-4b87-b4f6-75fb0d0d9a49",
+  "job_id": "uuid",
   "status": "queued",
   "total_rows": 6500,
   "created_at": "2026-03-02T02:10:30Z"
@@ -368,12 +356,9 @@
 ```
 
 ### GET `/bulk/jobs`
-설명:
-- 사용자 작업 이력을 최신순으로 페이지 조회한다.
-
 쿼리:
-- `page`: 기본 1, 최소 1
-- `page_size`: 기본 10, 최소 1, 최대 10
+- `page` (기본 1)
+- `page_size` (기본 10, 최대 10)
 
 응답 200:
 ```json
@@ -384,7 +369,7 @@
   "total_pages": 3,
   "items": [
     {
-      "job_id": "8f31f6b1-5d7a-4b87-b4f6-75fb0d0d9a49",
+      "job_id": "uuid",
       "file_name": "sample.xlsx",
       "status": "processing",
       "total_rows": 6500,
@@ -403,43 +388,16 @@
 
 ### GET `/bulk/jobs/{job_id}`
 설명:
-- 단일 작업 상태를 조회한다.
-
-응답 200:
-```json
-{
-  "job_id": "8f31f6b1-5d7a-4b87-b4f6-75fb0d0d9a49",
-  "file_name": "sample.xlsx",
-  "status": "completed",
-  "total_rows": 6500,
-  "processed_rows": 6500,
-  "success_rows": 6300,
-  "failed_rows": 200,
-  "progress_percent": 100,
-  "created_at": "2026-03-02T02:10:30Z",
-  "updated_at": "2026-03-02T02:12:40Z",
-  "error_message": null,
-  "can_download": true
-}
-```
+- 단일 작업 상태 조회
 
 ### GET `/bulk/jobs/{job_id}/download`
 설명:
-- 완료된 작업 결과 파일을 다운로드한다.
-
-응답 200:
-- `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- 완료 작업 결과 파일 다운로드
 
 ### POST `/bulk/jobs/delete`
-설명:
-- 선택한 작업을 일괄 삭제한다.
-- `processing` 상태 작업은 삭제 대상에서 제외된다.
-
 요청:
 ```json
-{
-  "job_ids": ["job-id-1", "job-id-2"]
-}
+{ "job_ids": ["job-id-1", "job-id-2"] }
 ```
 
 응답 200:
@@ -452,14 +410,11 @@
 }
 ```
 
-## 5. 지도조회 API
+## 4. 지도조회 API (`/map`)
 ### POST `/map/click`
 요청:
 ```json
-{
-  "lat": 37.5662952,
-  "lng": 126.9779451
-}
+{ "lat": 37.5662952, "lng": 126.9779451 }
 ```
 
 응답 200:
@@ -486,9 +441,7 @@
 ### POST `/map/search`
 요청:
 ```json
-{
-  "address": "서울특별시 종로구 세종대로 175"
-}
+{ "address": "서울특별시 종로구 세종대로 175" }
 ```
 
 응답:
@@ -534,15 +487,13 @@
 설명:
 - CSV 다운로드 (`pnu, area, current_price, previous_price, growth_rate`)
 
-응답 200:
-- `Content-Type: text/csv; charset=utf-8`
-
-## 6. 조회기록 API
+## 5. 조회기록 API (`/history`)
 인증: 로그인 필수
 
 ### POST `/history/query-logs`
 설명:
-- 개별조회/지도조회 결과를 저장하거나(3분 윈도우 내 중복 시) 최신 내용으로 병합한다.
+- 개별/지도 조회 결과 저장
+- 최근 3분 내 동일 `search_type+pnu` 요청은 병합(결과 건수/주소/rows 갱신)
 
 요청:
 ```json
@@ -554,25 +505,12 @@
 }
 ```
 
-응답 201:
-```json
-{
-  "id": "log-uuid",
-  "search_type": "map",
-  "pnu": "1111010100100010000",
-  "address_summary": "서울특별시 종로구 청운동 1",
-  "result_count": 0,
-  "created_at": "2026-03-05T05:20:31.120000+00:00"
-}
-```
-
 ### GET `/history/query-logs`
 쿼리:
 - `page` (기본 1)
 - `page_size` (기본 20, 최대 100)
 - `search_type` (`jibun|road|map`)
-- `sido` (주소 필터)
-- `sigungu` (주소 필터)
+- `sido`, `sigungu`
 - `sort_by` (`created_at|address_summary|search_type|result_count`)
 - `sort_order` (`asc|desc`)
 
@@ -597,82 +535,25 @@
 ```
 
 ### GET `/history/query-logs/{log_id}`
-응답 200:
-```json
-{
-  "id": "log-uuid",
-  "search_type": "jibun",
-  "pnu": "1168011800109700000",
-  "address_summary": "서울특별시 강남구 도곡동 970",
-  "result_count": 12,
-  "created_at": "2026-03-05T05:19:10.230000+00:00",
-  "rows": [
-    {
-      "기준년도": "2025",
-      "토지소재지": "서울특별시 강남구 도곡동",
-      "지번": "970",
-      "개별공시지가": "14,000,000 원/㎡",
-      "기준일자": "01월 01일",
-      "공시일자": "20250430",
-      "비고": ""
-    }
-  ]
-}
-```
+설명:
+- 상세 조회기록 + 연도별 결과 rows 조회
 
-## 7. 오류 응답 형식
-FastAPI 기본 `detail` 형식을 사용한다.
+## 6. 오류 응답 형식
+FastAPI 기본 `detail` 형식 사용:
 
-예시:
 ```json
 {
   "detail": {
-    "code": "VWORLD_KEY_MISSING",
-    "message": "VWORLD_API_KEY 설정이 필요합니다."
+    "code": "ERROR_CODE",
+    "message": "설명 메시지"
   }
 }
 ```
 
 주요 오류 코드:
-- `VWORLD_KEY_MISSING`
-- `VWORLD_INVALID_KEY` 계열 (`VWORLD_<resultCode>`)
-- `VWORLD_UNREACHABLE`
-- `VWORLD_HTTP_ERROR`
-- `VWORLD_INVALID_JSON`
-- `VWORLD_PROXY_MISSING`
-- `VWORLD_PROXY_UNREACHABLE`
-- `VWORLD_PROXY_HTTP_ERROR`
-- `VWORLD_PROXY_INVALID_JSON`
-- `VWORLD_DIRECT_AND_PROXY_FAILED`
-- `ROAD_FILE_NOT_FOUND`
-- `ROAD_GEOCODE_FAILED`
-- `PARCEL_NOT_FOUND`
-- `PARCEL_COORDINATE_MISSING`
-- `INVALID_COORDINATE`
-- `INVALID_ADDRESS_QUERY`
-- `MAP_ADDRESS_NOT_FOUND`
-- `MAP_PNU_DATA_INVALID`
-- `INVALID_PNU`
-- `UNAUTHORIZED`
-- `INVALID_CREDENTIALS`
-- `EMAIL_ALREADY_EXISTS`
-- `EMAIL_REQUIRED`
-- `ACCOUNT_NOT_FOUND`
-- `VERIFICATION_NOT_FOUND`
-- `VERIFICATION_PURPOSE_MISMATCH`
-- `VERIFICATION_EMAIL_MISMATCH`
-- `VERIFICATION_USED`
-- `VERIFICATION_EXPIRED`
-- `VERIFICATION_ATTEMPTS_EXCEEDED`
-- `VERIFICATION_CODE_INVALID`
-- `BULK_FILE_INVALID`
-- `BULK_ROW_LIMIT_EXCEEDED`
-- `BULK_JOB_NOT_FOUND`
-- `BULK_JOB_NOT_READY`
-- `PROFILE_IMAGE_INVALID`
-- `PROFILE_IMAGE_TOO_LARGE`
-- `PROFILE_UPDATE_EMPTY`
-- `PASSWORD_MISMATCH`
-- `PASSWORD_SAME`
-- `WITHDRAW_CONFIRM_INVALID`
-- `QUERY_LOG_NOT_FOUND`
+- 인증/계정: `UNAUTHORIZED`, `INVALID_CREDENTIALS`, `EMAIL_ALREADY_EXISTS`, `PASSWORD_MISMATCH`, `WITHDRAW_CONFIRM_INVALID`
+- 인증코드: `VERIFICATION_NOT_FOUND`, `VERIFICATION_EXPIRED`, `VERIFICATION_CODE_INVALID`, `ACCOUNT_NOT_FOUND`
+- 개별조회: `VWORLD_UNREACHABLE`, `VWORLD_HTTP_ERROR`, `VWORLD_DIRECT_AND_PROXY_FAILED`, `ROAD_FILE_NOT_FOUND`
+- 파일조회: `BULK_FILE_INVALID`, `BULK_ROW_LIMIT_EXCEEDED`, `BULK_JOB_NOT_FOUND`, `BULK_JOB_NOT_READY`
+- 지도조회: `INVALID_COORDINATE`, `INVALID_PNU`, `MAP_ADDRESS_NOT_FOUND`, `PARCEL_NOT_FOUND`
+- 조회기록: `QUERY_LOG_NOT_FOUND`

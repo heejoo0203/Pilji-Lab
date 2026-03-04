@@ -1,68 +1,106 @@
-# 시스템 아키텍처 (v2.1.0)
+# 시스템 아키텍처 (v2.2.0)
 
-## 1. 현재 아키텍처 (AS-IS, v1.0.0)
-- Frontend: Next.js 15 (App Router), TypeScript
+## 1. 아키텍처 개요
+- Frontend(Web): Next.js 15 (App Router), TypeScript, Tailwind
+- Frontend(App): Capacitor Android Wrapper (`apps/mobile`)
 - Backend: FastAPI (Railway)
-- Database: PostgreSQL (운영), SQLite (로컬 개발)
-- File Storage: API 로컬 스토리지(`apps/api/storage/bulk`, `apps/api/storage/profile_images`)
-- External API: VWorld (주소 변환 + 개별공시지가)
-- 안정화 구성: EC2 고정 IP VWorld 프록시(`infra/vworld-proxy`)
-- Road Data: `docs/TN_SPRD_RDNM.txt` (도로명 자음/목록 필터링)
-- Query History: 서버 DB `query_logs` 영구 저장(개별조회/지도조회)
+- Database: PostgreSQL (Neon/Railway), 로컬 SQLite
+- Spatial: PostGIS (`geog`, `geom`)
+- Cache: Redis (좌표->PNU 캐시, 지도 조회 보조)
+- External API:
+  - VWorld (주소/좌표/공시지가/토지특성)
+  - Kakao Maps JS SDK (지도 렌더링)
+- Network Fallback: AWS EC2 고정 IP VWorld 프록시 (`infra/vworld-proxy`)
+- Reference Data:
+  - 법정동 코드: `apps/web/public/ld_codes.json`
+  - 도로명 원본: `docs/TN_SPRD_RDNM.txt`
 
-## 2. 주요 데이터 흐름
-### 2.1 인증
-1. Web -> API `/api/v1/auth/*` 요청
-2. 회원가입 시 `email-availability` -> `recovery/send-code(signup)` -> `register` 순서로 검증
-3. API가 사용자 검증 후 쿠키(`access_token`, `refresh_token`) 발급
-4. Web은 쿠키 기반으로 로그인 상태를 유지
-5. 아이디 찾기(이름+연락처)는 `/auth/recovery/find-id/profile`로 마스킹 이메일을 응답
+## 2. 런타임 구성
+### 2.1 Web 계층
+- 페이지
+  - `/features` (비로그인 기본 랜딩)
+  - `/search` (개별조회)
+  - `/map` (지도조회, 로그인 필요)
+  - `/files` (파일조회, 로그인 필요)
+  - `/history` (조회기록, 로그인 필요)
+  - `/mypage` (계정관리, 로그인 필요)
+  - `/privacy`, `/account-deletion` (운영/스토어 정책 페이지)
+- 인증 상태에 따라 상단 네비게이션 노출 범위가 달라진다.
 
-### 2.2 개별조회(지번/도로명)
-1. Web이 검색 조건을 `/api/v1/land/single`로 전송
-2. API가 검색 유형별로 PNU를 생성/변환
-3. API가 VWorld API를 직접 호출
-4. 직접 호출 실패 시 EC2 프록시(`VWORLD_PROXY_URL`)로 자동 우회
-5. API가 연도별 최신 데이터만 선별해 내림차순 반환
-6. Web이 결과 테이블 렌더링, 로그인 사용자는 API를 통해 조회기록 저장
+### 2.2 API 계층
+- 인증/계정: `/api/v1/auth/*`
+- 개별조회: `/api/v1/land/*`
+- 파일조회: `/api/v1/bulk/*`
+- 조회기록: `/api/v1/history/*`
+- 지도조회: `/api/v1/map/*`
+- 헬스체크: `/health`
 
-### 2.3 도로명 선택기
-1. Web이 `/api/v1/land/road-initials`로 시/도, 시/군/구 요청
-2. API가 `TN_SPRD_RDNM.txt`에서 해당 지역 도로명 초성 집합을 계산
-3. Web이 선택한 초성으로 `/api/v1/land/road-names` 호출
-4. API가 실제 존재하는 도로명 목록만 반환
+### 2.3 저장 계층
+- `users`: 계정/약관/연락처/프로필
+- `email_verifications`: 이메일 인증 코드 수명주기
+- `bulk_jobs`: 대량조회 작업 상태/결과 경로
+- `query_logs`: 개별/지도 조회기록
+- `parcels`: 지도 조회 캐시 + 공간 질의 기초 데이터
+- 파일 스토리지
+  - 업로드/결과: `apps/api/storage/bulk`
+  - 프로필 이미지: `apps/api/storage/profile_images`
 
-### 2.4 파일조회(v1)
-1. Web이 `/api/v1/bulk/template`, `/api/v1/bulk/guide`로 양식/안내를 조회
-2. 사용자가 파일 업로드 시 `/api/v1/bulk/jobs`로 작업 생성
-3. API가 파일 저장 후 BackgroundTasks로 처리 시작
-4. 처리 중 진행도는 `bulk_jobs`에 누적
-5. Web이 `/api/v1/bulk/jobs` 폴링으로 상태/이력 표시
-6. 완료 시 `/api/v1/bulk/jobs/{job_id}/download`로 결과 다운로드
-7. 이력 정리는 `/api/v1/bulk/jobs/delete`로 다중 삭제
+## 3. 핵심 데이터 흐름
+### 3.1 회원가입/로그인
+1. Web -> `/auth/email-availability`로 이메일 중복 확인
+2. Web -> `/auth/recovery/send-code`로 회원가입 인증코드 발송
+3. Web -> `/auth/register`로 가입 완료(약관 동의 포함)
+4. Web -> `/auth/login` 성공 시 HttpOnly 쿠키 발급
+5. Web -> `/auth/me`로 세션 검증
 
-### 2.5 VWorld 복원력(Resilience) 경로
-1. 1차 시도: API -> VWorld 직접 호출
-2. 실패 시: API -> EC2 Proxy -> VWorld
-3. 둘 다 실패하면 API는 `VWORLD_DIRECT_AND_PROXY_FAILED` 오류와 함께 직접/프록시 실패 원인을 동시 반환
+### 3.2 개별조회
+1. 사용자 입력(지번/도로명) -> `/land/single`
+2. API가 PNU 생성/변환 후 VWorld 조회
+3. 실패 시 직접 호출 -> 프록시 호출 순으로 재시도
+4. 연도별 행을 정규화/정렬 후 반환
+5. 로그인 사용자는 `/history/query-logs`에 저장
 
-## 3. 아키텍처 다이어그램
-현재 다이어그램은 사용자/프론트/백엔드의 흐름을 한눈에 볼 수 있도록 유지한다.
+### 3.3 파일조회
+1. `/bulk/guide`, `/bulk/template`로 업로드 준비
+2. `/bulk/jobs` 업로드(비동기 작업 생성)
+3. 백그라운드 처리:
+   - 헤더 자동 매핑/정규화
+   - 유니크 주소 키 병렬 조회
+   - 5행 단위 진행률 업데이트
+   - 결과 파일 생성
+4. `/bulk/jobs` 폴링으로 상태/이력 확인
+5. `/bulk/jobs/{id}/download`로 완료 작업 결과 다운로드
 
+### 3.4 지도조회
+1. Web에서 Kakao 지도 클릭 또는 주소 입력
+2. `/map/click` 또는 `/map/search` 호출
+3. API 내부 처리:
+   - 좌표->PNU 역지오코딩
+   - Redis PNU 캐시 활용
+   - `parcels` 캐시 조회
+   - 필요 시 VWorld 실시간 조회
+   - 증감률/면적×단가/인근 평균(200m) 계산
+4. 필요 시 `/map/price-rows`, `/map/land-details` 추가 조회
+5. `/map/export` CSV 다운로드
+6. 결과를 `/history/query-logs`(search_type=`map`)에 저장
+
+### 3.5 조회기록
+1. `/history/query-logs`로 최신순 목록 조회
+2. 유형/시도/시군구 필터 및 정렬(`created_at`, `address_summary`, `search_type`, `result_count`)
+3. 항목 클릭 시:
+   - `jibun|road` -> `/search?recordId=...`
+   - `map` -> `/map?recordId=...`
+
+## 4. 장애 복원력
+- VWorld 직접 호출 실패 시 EC2 프록시 경유 재시도
+- 에러 응답에 직접 호출/프록시 호출 실패 원인을 함께 반환
+- `DATABASE_URL` 정규화(`postgresql://` -> `postgresql+psycopg://`)로 배포 환경 호환성 확보
+- 도로명/법정동 파일 경로 자동 탐색 로직으로 monorepo/단독배포 모두 지원
+
+## 5. 아키텍처 다이어그램
 ![시스템 아키텍처](./architecture.svg)
 
-## 4. 배포 기준 아키텍처 (v1)
-- Web: Vercel
-- API: Railway
-- DB: Railway PostgreSQL
-- VWorld 우회: AWS EC2(Seoul) + Elastic IP + FastAPI Proxy
-- API 환경변수로 VWorld 키/도메인/CORS/프록시를 제어
-- 인증/메일 관련 환경변수(SMTP, 인증코드 정책)로 회원가입/복구 플로우를 제어
-- 운영 DB는 PostgreSQL + Alembic 마이그레이션으로 관리
-- 업로드/결과/프로필 이미지 저장 경로를 런타임에서 보존
-- 헬스체크: `GET /health`
-
-## 5. 다음 단계 (TO-BE)
-- 지도조회 2단계: Kakao Map + PostgreSQL/PostGIS + Redis 캐시
-- 공간 집계 2단계: 폴리곤 기반 집계 API(`/aggregate`)
-- 조회기록 서버 영구 저장 전환(localStorage -> DB)
+## 6. 다음 단계(TO-BE)
+- 지도 폴리곤 집계(`ST_Intersects`) API 추가
+- 운영 지표 수집(에러율, VWorld 실패율, 프록시 사용률)
+- 소셜 로그인(네이버/카카오)

@@ -4,10 +4,11 @@ autoLV는 **개별공시지가 조회/분석 서비스**입니다.
 지번/도로명 단건 조회, 엑셀 대량 조회, 지도 기반 조회, 조회기록 관리 기능을 제공합니다.
 
 ## 릴리즈 상태
-- 현재 기준 버전: **v2.1.0** (로컬/배포 기준 최신)
+- 현재 기준 버전: **v2.2.0** (로컬/배포 기준 최신)
 - 이전 안정 태그: `v1.0.0` (2026-03-02)
 - v2 핵심 확장: **카카오 지도조회 + 지도조회 기록 연동 + 조회기록 고급 필터/정렬**
 - v2.1 핵심 확장: **인증 UX 개선(이메일 중복확인, 약관 팝업, 아이디 저장, 이름/연락처 기반 아이디 찾기)**
+- v2.2 핵심 확장: **지도조회 완성도 강화 + 정책 페이지 + Android Wrapper 배포 정리**
 
 ## 주요 기능
 ### 1) 개별조회
@@ -158,7 +159,8 @@ python scripts/reset_db_and_seed_admin.py
 - DB 스키마: `docs/04-db-schema.md`
 - 폴더 구조: `docs/05-folder-structure.md`
 - 배포 가이드: `docs/06-deployment.md`
-- 릴리즈 노트(v1): `docs/07-release-notes-v1.0.0.md`
+- 릴리즈 노트(v1, 아카이브): `docs/07-release-notes-v1.0.0.md`
+- 릴리즈 노트(최신): `docs/09-release-notes-v2.2.0.md`
 - 포트폴리오/운영 개선: `docs/08-portfolio-enhancement.md`
 - 기능 상세: `docs/feature-spec.md`
 - 개인정보처리방침: `https://auto-lv.vercel.app/privacy`
