@@ -130,6 +130,7 @@ npm run android:build:debug
 APK 다운로드:
 - 운영 URL: [`https://auto-lv.vercel.app/downloads/autoLV-android-release.apk`](https://auto-lv.vercel.app/downloads/autoLV-android-release.apk)
 - 저장소 파일: [`apps/web/public/downloads/autoLV-android-release.apk`](apps/web/public/downloads/autoLV-android-release.apk)
+- Play Console 업로드용 AAB: `apps/mobile/android/app/build/outputs/bundle/release/app-release.aab`
 
 상세 가이드:
 - `apps/mobile/README.md`

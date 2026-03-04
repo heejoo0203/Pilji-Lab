@@ -67,6 +67,17 @@ npm run android:build:release
 
 출력:
 - `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+- `apps/mobile/android/app/build/outputs/bundle/release/app-release.aab`
+
+### 정식 서명 키(운영용)
+- keystore 파일: `C:\Users\82102\.autolv\autolv-upload-keystore.jks`
+- alias: `autolv_upload`
+- 비밀번호/키 비밀번호: `C:\Users\82102\.autolv\keystore-secrets.txt`에 저장
+
+보안 권장:
+1. `keystore-secrets.txt`는 암호관리 툴로 옮긴 뒤 로컬 파일 삭제
+2. `autolv-upload-keystore.jks`는 별도 백업(클라우드 + 오프라인) 필수
+3. keystore 분실 시 기존 앱 업데이트 배포 불가
 
 ## 5) 운영 권장
 1. Play 배포 전에는 반드시 release keystore로 서명
