@@ -2,6 +2,16 @@
   "appId": "com.autolv.app",
   "appName": "autoLV",
   "webDir": "www",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "showSpinner": false,
+      "backgroundColor": "#F8FAFD",
+      "androidSplashResourceName": "launch_splash",
+      "androidScaleType": "CENTER"
+    }
+  },
   "server": {
     "url": "https://auto-lv.vercel.app",
     "cleartext": false,

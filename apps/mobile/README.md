@@ -5,6 +5,7 @@
 - 패키지명: `com.autolv.app`
 - 웹 소스: `https://auto-lv.vercel.app`
 - 아이콘 소스: `docs/autoLV icon.jpg` -> `apps/mobile/assets/icon-only.jpg`
+- 시작 스플래시: `2초` 표시 후 앱 진입
 
 ## 1) 초기 구성
 ```bash
