@@ -432,12 +432,6 @@ function SearchPageClient() {
         )}
       </section>
 
-      {!isLoggedIn ? (
-        <section className="panel promo-min">
-          <h2>파일 조회 (로그인 필요)</h2>
-          <p>회원가입 후 최대 10,000행 엑셀 업로드, 비동기 처리, 결과 다운로드를 사용할 수 있습니다.</p>
-        </section>
-      ) : null}
     </>
   );
 }
