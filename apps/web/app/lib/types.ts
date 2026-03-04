@@ -102,3 +102,19 @@ export type BulkDeleteResponse = {
   deleted_job_ids: string[];
   skipped_job_ids: string[];
 };
+
+export type MapLookupResponse = {
+  lat: number;
+  lng: number;
+  pnu: string;
+  address_summary: string;
+  area: number | null;
+  price_current: number | null;
+  price_previous: number | null;
+  growth_rate: number | null;
+  estimated_total_price: number | null;
+  nearby_avg_price: number | null;
+  nearby_radius_m: number;
+  cache_hit: boolean;
+  rows: LandResultRow[];
+};

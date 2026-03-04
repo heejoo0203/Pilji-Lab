@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     bulk_lookup_workers: int = Field(default=6, alias="BULK_LOOKUP_WORKERS")
     bulk_progress_update_min_seconds: float = Field(default=1.0, alias="BULK_PROGRESS_UPDATE_MIN_SECONDS")
     profile_image_dir: str = Field(default="./storage/profile_images", alias="PROFILE_IMAGE_DIR")
+    redis_url: str = Field(default="", alias="REDIS_URL")
+    redis_pnu_ttl_seconds: int = Field(default=86400, alias="REDIS_PNU_TTL_SECONDS")
+    map_price_cache_ttl_seconds: int = Field(default=86400, alias="MAP_PRICE_CACHE_TTL_SECONDS")
+    map_nearby_radius_m: int = Field(default=200, alias="MAP_NEARBY_RADIUS_M")
 
 
 def _normalize_database_url(database_url: str) -> str:

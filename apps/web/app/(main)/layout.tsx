@@ -66,11 +66,17 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <Link href="/search" className={`nav-item ${pathname === "/search" ? "active" : ""}`}>
               개별조회
             </Link>
+            <Link href="/map" className={`nav-item ${pathname === "/map" ? "active" : ""}`}>
+              지도조회
+            </Link>
           </nav>
         ) : (
           <nav className="center-nav auth-nav">
             <Link href="/search" className={`nav-item ${pathname === "/search" ? "active" : ""}`}>
               개별조회
+            </Link>
+            <Link href="/map" className={`nav-item ${pathname === "/map" ? "active" : ""}`}>
+              지도조회
             </Link>
             <Link href="/files" className={`nav-item ${pathname === "/files" ? "active" : ""}`}>
               파일조회
