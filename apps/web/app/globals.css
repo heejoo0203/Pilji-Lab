@@ -1205,11 +1205,12 @@ body::before {
 @media (max-width: 860px) {
   .top-nav {
     height: auto;
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: center;
     padding: 12px 14px;
     gap: 10px;
+    overflow: visible;
   }
 
   .brand {
@@ -1217,11 +1218,51 @@ body::before {
   }
 
   .center-nav {
-    order: 3;
+    order: 2;
     width: 100%;
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 3px;
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 8px;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .center-nav.auth-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .center-nav.guest-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .center-nav .nav-item {
+    width: 100%;
+    text-align: center;
+    padding: 9px 7px;
+    font-size: 12px;
+    border-radius: 11px;
+    border: 1px solid #d6dfeb;
+    background: #f5f8fd;
+  }
+
+  .nav-dropdown {
+    position: relative;
+    z-index: 46;
+  }
+
+  .nav-dropdown-menu {
+    top: calc(100% + 8px);
+    min-width: 170px;
+    box-shadow: var(--shadow-float);
+  }
+
+  .nav-dropdown:hover .nav-dropdown-menu,
+  .nav-dropdown.open .nav-dropdown-menu {
+    display: grid;
+  }
+
+  .nav-dropdown::after {
+    display: none;
   }
 
   .right-profile {
@@ -1309,7 +1350,6 @@ body::before {
     order: 2;
     width: 100%;
     grid-column: 1 / -1;
-    display: grid;
     gap: 6px;
     overflow: visible;
     padding-bottom: 0;
@@ -1323,28 +1363,11 @@ body::before {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .center-nav .nav-item {
-    width: 100%;
-    text-align: center;
-    padding: 9px 6px;
-    font-size: 12px;
-    border-radius: 11px;
-    border: 1px solid #d6dfeb;
-    background: #f5f8fd;
-  }
-
   .nav-dropdown-menu {
-    position: static;
-    display: none;
-    min-width: 0;
-    width: 100%;
-    border-radius: 10px;
-    box-shadow: none;
-    margin-top: 4px;
-  }
-
-  .nav-dropdown.open .nav-dropdown-menu {
-    display: grid;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: min(190px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
   }
 
   .right-profile {
