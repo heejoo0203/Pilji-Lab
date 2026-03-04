@@ -4,40 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
-import { ProfileActionModal, type ProfileActionMode } from "@/app/components/profile-action-modal";
 import { useAuth } from "@/app/components/auth-provider";
-import type { UserTerms } from "@/app/lib/types";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const {
-    user,
-    openAuth,
-    logout,
-    updateProfile,
-    changePassword,
-    deleteAccount,
-    loadTerms,
-    expectedWithdrawalText,
-    authLoading,
-    authMessage,
-  } = useAuth();
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [actionMode, setActionMode] = useState<ProfileActionMode>("profile");
-  const [actionOpen, setActionOpen] = useState(false);
-  const [termsLoading, setTermsLoading] = useState(false);
-  const [terms, setTerms] = useState<UserTerms | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const { user, openAuth, logout } = useAuth();
+  const [lookupMenuOpen, setLookupMenuOpen] = useState(false);
+  const lookupMenuRef = useRef<HTMLDivElement | null>(null);
 
   const isLoggedIn = Boolean(user);
-  const userLabel = user?.full_name?.trim() || user?.email || "사용자";
+
+  useEffect(() => {
+    setLookupMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const closeOnOutside = (event: MouseEvent) => {
-      if (!menuRef.current) return;
-      if (!menuRef.current.contains(event.target as Node)) {
-        setProfileOpen(false);
+      if (!lookupMenuRef.current) return;
+      if (!lookupMenuRef.current.contains(event.target as Node)) {
+        setLookupMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", closeOnOutside);
@@ -46,22 +32,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     };
   }, []);
 
-  useEffect(() => {
-    setProfileOpen(false);
-    setActionOpen(false);
-  }, [pathname]);
-
-  const openProfileAction = (mode: ProfileActionMode) => {
-    setActionMode(mode);
-    setActionOpen(true);
-    setProfileOpen(false);
-    if (mode === "terms") {
-      setTermsLoading(true);
-      void loadTerms()
-        .then((result) => setTerms(result))
-        .finally(() => setTermsLoading(false));
-    }
-  };
+  const lookupActive = pathname === "/search" || pathname === "/map" || pathname === "/files";
+  const featuresActive = pathname === "/features";
+  const historyActive = pathname === "/history";
+  const myPageActive = pathname === "/mypage";
 
   return (
     <div className="app-shell">
@@ -71,100 +45,78 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           <span className="brand-lv">LV</span>
         </Link>
 
-        {!isLoggedIn ? (
-          <nav className="center-nav guest-nav">
-            <Link href="/search" className={`nav-item ${pathname === "/search" ? "active" : ""}`}>
-              개별조회
-            </Link>
-            <Link href="/map" className={`nav-item ${pathname === "/map" ? "active" : ""}`}>
-              지도조회
-            </Link>
-          </nav>
-        ) : (
-          <nav className="center-nav auth-nav">
-            <Link href="/search" className={`nav-item ${pathname === "/search" ? "active" : ""}`}>
-              개별조회
-            </Link>
-            <Link href="/map" className={`nav-item ${pathname === "/map" ? "active" : ""}`}>
-              지도조회
-            </Link>
-            <Link href="/files" className={`nav-item ${pathname === "/files" ? "active" : ""}`}>
-              파일조회
-            </Link>
-            <Link href="/history" className={`nav-item ${pathname === "/history" ? "active" : ""}`}>
+        <nav className={`center-nav ${isLoggedIn ? "auth-nav" : "guest-nav"}`}>
+          <div
+            className={`nav-dropdown ${lookupActive ? "active" : ""} ${lookupMenuOpen ? "open" : ""}`}
+            ref={lookupMenuRef}
+            onMouseEnter={() => setLookupMenuOpen(true)}
+            onMouseLeave={() => setLookupMenuOpen(false)}
+          >
+            <button
+              type="button"
+              className={`nav-item nav-dropdown-trigger ${lookupActive ? "active" : ""}`}
+              onClick={() => setLookupMenuOpen((prev) => !prev)}
+              aria-expanded={lookupMenuOpen}
+            >
+              조회
+            </button>
+            <div className="nav-dropdown-menu">
+              <Link href="/search" className={`nav-dropdown-item ${pathname === "/search" ? "active" : ""}`}>
+                개별조회
+              </Link>
+              {isLoggedIn ? (
+                <>
+                  <Link href="/map" className={`nav-dropdown-item ${pathname === "/map" ? "active" : ""}`}>
+                    지도조회
+                  </Link>
+                  <Link href="/files" className={`nav-dropdown-item ${pathname === "/files" ? "active" : ""}`}>
+                    파일조회
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          {isLoggedIn ? (
+            <Link href="/history" className={`nav-item ${historyActive ? "active" : ""}`}>
               조회기록
             </Link>
-          </nav>
-        )}
+          ) : null}
+
+          <Link href="/features" className={`nav-item ${featuresActive ? "active" : ""}`}>
+            기능설명
+          </Link>
+
+          {isLoggedIn ? (
+            <Link href="/mypage" className={`nav-item ${myPageActive ? "active" : ""}`}>
+              마이페이지
+            </Link>
+          ) : null}
+        </nav>
 
         <div className="right-profile">
           {isLoggedIn ? (
-            <div className="profile-menu" ref={menuRef}>
-              <button
-                className="profile-trigger"
-                type="button"
-                onClick={() => setProfileOpen((prev) => !prev)}
-              >
-                {user?.profile_image_url ? (
-                  <img className="avatar avatar-image" src={user.profile_image_url} alt="프로필 이미지" />
-                ) : (
-                  <div className="avatar">{userLabel.charAt(0).toUpperCase()}</div>
-                )}
-                <span className="profile-name">{userLabel}</span>
-              </button>
-              <div className={`profile-dropdown ${profileOpen ? "open" : ""}`}>
-                <button className="profile-action" type="button" onClick={() => openProfileAction("profile")}>
-                  회원 정보 수정
-                </button>
-                <button className="profile-action" type="button" onClick={() => openProfileAction("password")}>
-                  비밀번호 변경
-                </button>
-                <button className="profile-action" type="button" onClick={() => openProfileAction("terms")}>
-                  서비스 약관
-                </button>
-                <button className="profile-action" type="button" onClick={() => openProfileAction("withdraw")}>
-                  회원 탈퇴
-                </button>
-                <button
-                  className="profile-action danger"
-                  type="button"
-                  onClick={async () => {
-                    setProfileOpen(false);
-                    await logout();
-                    router.push("/search");
-                  }}
-                >
-                  로그아웃
-                </button>
-              </div>
-            </div>
+            <button
+              className="nav-item danger"
+              type="button"
+              onClick={async () => {
+                await logout();
+                router.push("/search");
+              }}
+            >
+              로그아웃
+            </button>
           ) : (
             <div className="guest-actions">
               <button className="nav-item" onClick={() => openAuth("login")}>
                 로그인
               </button>
-              <button className="nav-item primary" onClick={() => openAuth("register")}>
-                회원가입
-              </button>
             </div>
           )}
         </div>
       </header>
+
       <main className="content-wrap">{children}</main>
-      <ProfileActionModal
-        open={actionOpen}
-        mode={actionMode}
-        user={user}
-        authLoading={authLoading}
-        termsLoading={termsLoading}
-        terms={terms}
-        message={authMessage}
-        expectedWithdrawalText={expectedWithdrawalText}
-        onClose={() => setActionOpen(false)}
-        onUpdateProfile={updateProfile}
-        onChangePassword={changePassword}
-        onDeleteAccount={deleteAccount}
-      />
     </div>
   );
 }

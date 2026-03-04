@@ -45,7 +45,7 @@ export default function MapPage() {
 }
 
 function MapPageClient() {
-  const { user } = useAuth();
+  const { user, openAuth } = useAuth();
   const params = useSearchParams();
   const recordId = params.get("recordId");
 
@@ -89,6 +89,7 @@ function MapPageClient() {
   }, []);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
     const appKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY?.trim();
     if (!appKey) {
       setMessage("NEXT_PUBLIC_KAKAO_MAP_APP_KEY 설정이 필요합니다.");
@@ -135,7 +136,7 @@ function MapPageClient() {
         debounceTimerRef.current = null;
       }
     };
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (!recordId || !isLoggedIn) return;
@@ -344,7 +345,7 @@ function MapPageClient() {
     }
   };
 
-  return (
+  return isLoggedIn ? (
     <section className="map-page">
       <div className="map-stage panel">
         <div className="map-stage-head">
@@ -445,6 +446,14 @@ function MapPageClient() {
           </>
         )}
       </section>
+    </section>
+  ) : (
+    <section className="panel">
+      <h2>지도조회</h2>
+      <p className="hint">비로그인 상태에서는 개별조회만 사용할 수 있습니다.</p>
+      <button className="btn-primary" onClick={() => openAuth("login")}>
+        로그인하고 지도조회 사용하기
+      </button>
     </section>
   );
 }
