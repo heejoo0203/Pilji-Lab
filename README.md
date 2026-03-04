@@ -4,9 +4,10 @@ autoLV는 **개별공시지가 조회/분석 서비스**입니다.
 지번/도로명 단건 조회, 엑셀 대량 조회, 지도 기반 조회, 조회기록 관리 기능을 제공합니다.
 
 ## 릴리즈 상태
-- 현재 기준 버전: **v2.0.0** (로컬/배포 기준 최신)
+- 현재 기준 버전: **v2.1.0** (로컬/배포 기준 최신)
 - 이전 안정 태그: `v1.0.0` (2026-03-02)
 - v2 핵심 확장: **카카오 지도조회 + 지도조회 기록 연동 + 조회기록 고급 필터/정렬**
+- v2.1 핵심 확장: **인증 UX 개선(이메일 중복확인, 약관 팝업, 아이디 저장, 이름/연락처 기반 아이디 찾기)**
 
 ## 주요 기능
 ### 1) 개별조회
@@ -46,6 +47,10 @@ autoLV는 **개별공시지가 조회/분석 서비스**입니다.
 
 ### 5) 인증/계정
 - 회원가입/로그인/로그아웃
+- 회원가입 이메일 중복확인 + 이메일 인증코드 검증
+- 회원가입 입력 확장: 이름 + 연락처 + 약관 팝업 동의
+- 아이디 저장(localStorage) 지원
+- 아이디 찾기(이름 + 연락처, 마스킹 이메일 응답)
 - 비밀번호 표시 토글
 - 프로필 수정(닉네임/이미지)
 - 비밀번호 변경
@@ -86,6 +91,8 @@ copy apps\\web\\.env.example apps\\web\\.env.local
   - `VWORLD_API_DOMAIN`
   - `CORS_ORIGINS`
   - `ROAD_NAME_FILE_PATH`
+  - `MAIL_DELIVERY_MODE`, `MAIL_FROM`
+  - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
   - (선택) `VWORLD_PROXY_URL`, `VWORLD_PROXY_TOKEN`
 - Web(`apps/web/.env.local`)
   - `NEXT_PUBLIC_API_BASE_URL`

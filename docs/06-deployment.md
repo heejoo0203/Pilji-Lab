@@ -1,31 +1,38 @@
-# v1 배포 가이드 (DB + 배포)
+# v2.1 배포 가이드 (DB + 배포)
 
 ## 0. 릴리즈 기준
 - 배포 스냅샷 태그: `v1.0.0`
 - 릴리즈 날짜: `2026-03-02`
 - 릴리즈 노트: `docs/07-release-notes-v1.0.0.md`
+- 현재 운영 브랜치 기준: `v2.1.0` (지도조회 + 인증 UX 개선 반영)
 
 ## 1. 배포 목표
 v1 릴리스 범위(개별조회, 인증/계정관리, 파일조회)를 운영 환경에서 안정적으로 서비스한다.
 
-## 2. 배포 범위 (v1)
+## 2. 배포 범위 (v2.1)
 - 개별조회(지번/도로명)
 - 회원가입/로그인/로그아웃/내 정보 조회
+- 회원가입 이메일 인증/중복확인, 아이디 찾기(이름+연락처), 비밀번호 재설정
 - 회원정보 수정(사진/닉네임), 비밀번호 변경, 회원 탈퇴
 - 파일조회(양식 다운로드, 업로드, 비동기 처리, 이력, 결과 다운로드)
-- 조회기록(localStorage)
+- 조회기록(DB: `query_logs`)
+- 지도조회(Kakao Map, 클릭 조회, CSV 내보내기)
 
 제외:
-- 지도조회(2단계)
-- 폴리곤 집계(2단계)
+- 지도 폴리곤 집계(`/aggregate`) 고도화
+- 소셜 로그인
 
 ## 3. DB 전략
 - 개발 로컬: SQLite (`sqlite:///./autolv.db`)
 - 운영 배포: PostgreSQL (`postgresql+psycopg://...`)
 - 스키마 관리: Alembic (`apps/api/alembic`)
 
-초기 마이그레이션:
+필수 마이그레이션:
 - `20260302_0001` (`users`, `bulk_jobs`)
+- `20260302_0002` (`query_logs`)
+- `20260304_0003` (`parcels`, PostGIS)
+- `20260305_0004` (`email_verifications`, terms 컬럼)
+- `20260305_0005` (`users.phone_number`)
 
 ## 4. 환경변수
 ### 4.1 API (`apps/api/.env`)
@@ -51,6 +58,17 @@ LD_CODE_FILE_PATH=
 BULK_STORAGE_DIR=./storage/bulk
 BULK_MAX_ROWS=10000
 PROFILE_IMAGE_DIR=./storage/profile_images
+EMAIL_VERIFICATION_EXP_MINUTES=10
+EMAIL_VERIFICATION_MAX_ATTEMPTS=5
+EMAIL_DEBUG_RETURN_CODE=false
+MAIL_DELIVERY_MODE=smtp
+MAIL_FROM=kr.autolv@gmail.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=kr.autolv@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
 ```
 
 참고:
@@ -89,10 +107,10 @@ alembic upgrade head
 3. 배포 후 `GET /health` 확인
 4. 마이그레이션 실행(배포 파이프라인 또는 One-off 실행)
 
-### 6.3 DB: Railway PostgreSQL
+### 6.3 DB: PostgreSQL(Neon/Railway)
 1. Postgres 서비스 생성
 2. API 서비스 환경변수에 `DATABASE_URL` 연결
-3. DB 탭에서 테이블(`users`, `bulk_jobs`) 생성 여부 확인
+3. DB 탭에서 테이블(`users`, `bulk_jobs`, `query_logs`, `parcels`, `email_verifications`) 생성 여부 확인
 
 ## 7. 고정 IP 프록시 (권장)
 Railway 환경에서 VWorld 직접 호출이 `502` 또는 연결 종료(`RemoteDisconnected`)로 불안정할 때 사용한다.
@@ -111,15 +129,23 @@ Railway 환경에서 VWorld 직접 호출이 `502` 또는 연결 종료(`RemoteD
 ## 8. 운영 점검 절차 (배포 직후)
 1. `GET /health` 200 확인
 2. 회원가입/로그인/로그아웃 동작 확인
+  - 이메일 중복확인
+  - 회원가입 코드 발송/검증
+  - 아이디 찾기(이름+연락처 마스킹 응답)
+  - 비밀번호 재설정 코드 발송/변경
 3. 프로필 수정/비밀번호 변경/회원 탈퇴 동작 확인
 4. 개별조회(지번/도로명) 실데이터 응답 확인
-5. 파일조회 테스트
+5. 지도조회 테스트
+  - 지도 렌더링
+  - 클릭 조회
+  - CSV 내보내기
+6. 파일조회 테스트
   - 템플릿 다운로드
   - 샘플 업로드
   - 진행률 폴링
   - 결과 다운로드
   - 작업 삭제
-6. CORS/쿠키 확인
+7. CORS/쿠키 확인
   - Web 도메인에서 로그인 유지
   - `HttpOnly`, `Secure`, `SameSite=None` 확인
 

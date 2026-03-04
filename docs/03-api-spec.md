@@ -1,4 +1,4 @@
-# API 명세 (v1.0.0)
+# API 명세 (v2.1.0)
 
 기본 경로: `/api/v1`  
 인증: 쿠키 기반 JWT(`access_token`, `refresh_token`)
@@ -30,7 +30,10 @@
   "password": "Abcd1234!",
   "confirm_password": "Abcd1234!",
   "full_name": "홍길동",
-  "agreements": true
+  "phone_number": "01012345678",
+  "agreements": true,
+  "verification_id": "c4f4aa8c-5f52-4df3-b3e7-7f16abdf3f2c",
+  "verification_code": "123456"
 }
 ```
 
@@ -47,8 +50,10 @@
 - `email`: 형식 검증 + 중복 불가
 - `password`: 8~16자, 영문/숫자/특수문자 포함, UTF-8 기준 72바이트 이하
 - `confirm_password`: `password`와 동일
-- `full_name`: 2~20자, 한글/영문/숫자만 허용
+- `full_name`: 2~20자, 한글/영문/숫자만 허용(닉네임 규칙)
+- `phone_number`: 숫자/하이픈 허용, 서버에서 숫자만 정규화, 9~11자리
 - `agreements`: `true` 필수
+- `verification_id`, `verification_code`: 이메일 인증 코드 검증
 
 ### POST `/auth/login`
 요청:
@@ -81,9 +86,22 @@
   "id": "uuid",
   "email": "user@example.com",
   "full_name": "홍길동",
+  "phone_number": "01012345678",
   "role": "user",
   "auth_provider": "local",
   "profile_image_url": "/media/profile/ab12cd34ef56.png"
+}
+```
+
+### GET `/auth/email-availability?email=user@example.com`
+설명:
+- 회원가입용 이메일 중복 확인 API
+
+응답 200:
+```json
+{
+  "email": "user@example.com",
+  "available": true
 }
 ```
 
@@ -138,6 +156,93 @@
 
 응답 204:
 - 본문 없음
+
+### GET `/auth/terms`
+설명:
+- 로그인 사용자가 동의한 약관 버전/본문/동의시각을 조회한다.
+
+응답 200:
+```json
+{
+  "version": "2026-03-05-v1",
+  "content": "[autoLV 서비스 이용약관] ...",
+  "accepted_at": "2026-03-05T06:31:15.000000+00:00"
+}
+```
+
+### GET `/auth/terms/current`
+설명:
+- 비로그인(회원가입 화면 포함)에서 현재 약관 본문을 조회한다.
+
+응답 200:
+```json
+{
+  "version": "2026-03-05-v1",
+  "content": "[autoLV 서비스 이용약관] ...",
+  "accepted_at": null
+}
+```
+
+### POST `/auth/recovery/send-code`
+요청:
+```json
+{
+  "purpose": "signup",
+  "email": "user@example.com"
+}
+```
+
+응답 200:
+```json
+{
+  "verification_id": "c4f4aa8c-5f52-4df3-b3e7-7f16abdf3f2c",
+  "expires_in_seconds": 600,
+  "message": "인증 코드가 발송되었습니다.",
+  "debug_code": null
+}
+```
+
+비고:
+- `purpose`: `signup | find_id | reset_password`
+- 운영에서는 `debug_code`가 `null`이어야 한다(`EMAIL_DEBUG_RETURN_CODE=false` 권장).
+
+### POST `/auth/recovery/find-id/profile`
+설명:
+- 이름 + 연락처로 가입 이메일을 찾고 마스킹된 이메일만 반환한다.
+
+요청:
+```json
+{
+  "full_name": "홍길동",
+  "phone_number": "010-1234-5678"
+}
+```
+
+응답 200:
+```json
+{
+  "masked_email": "he***03@naver.com"
+}
+```
+
+### POST `/auth/recovery/reset-password`
+요청:
+```json
+{
+  "email": "user@example.com",
+  "verification_id": "c4f4aa8c-5f52-4df3-b3e7-7f16abdf3f2c",
+  "code": "123456",
+  "new_password": "NewPass456!",
+  "confirm_new_password": "NewPass456!"
+}
+```
+
+응답 200:
+```json
+{
+  "message": "비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요."
+}
+```
 
 ## 3. 개별공시지가 API
 ### POST `/land/single`
@@ -347,7 +452,175 @@
 }
 ```
 
-## 5. 오류 응답 형식
+## 5. 지도조회 API
+### POST `/map/click`
+요청:
+```json
+{
+  "lat": 37.5662952,
+  "lng": 126.9779451
+}
+```
+
+응답 200:
+```json
+{
+  "lat": 37.5662952,
+  "lng": 126.9779451,
+  "pnu": "1111010100100010000",
+  "address_summary": "서울특별시 종로구 청운동 1",
+  "jibun_address": "서울특별시 종로구 청운동 1",
+  "road_address": "서울특별시 종로구 자하문로 1",
+  "area": 1234.5,
+  "price_current": 12000000,
+  "price_previous": 11200000,
+  "growth_rate": 7.14,
+  "estimated_total_price": 14814000000,
+  "nearby_avg_price": 10650000,
+  "nearby_radius_m": 200,
+  "cache_hit": false,
+  "rows": []
+}
+```
+
+### POST `/map/search`
+요청:
+```json
+{
+  "address": "서울특별시 종로구 세종대로 175"
+}
+```
+
+응답:
+- `/map/click`과 동일 스키마
+
+### GET `/map/by-pnu?pnu=1111010100100010000`
+응답:
+- `/map/click`과 동일 스키마
+
+### GET `/map/price-rows?pnu=1111010100100010000`
+응답 200:
+```json
+{
+  "pnu": "1111010100100010000",
+  "rows": [
+    {
+      "기준년도": "2025",
+      "토지소재지": "서울특별시 종로구 청운동",
+      "지번": "1",
+      "개별공시지가": "12,000,000 원/㎡",
+      "기준일자": "01월 01일",
+      "공시일자": "20250430",
+      "비고": ""
+    }
+  ]
+}
+```
+
+### GET `/map/land-details?pnu=1111010100100010000`
+응답 200:
+```json
+{
+  "pnu": "1111010100100010000",
+  "stdr_year": "2025",
+  "area": 1234.5,
+  "land_category_name": "대",
+  "purpose_area_name": "제2종일반주거지역",
+  "purpose_district_name": "기타경관지구"
+}
+```
+
+### GET `/map/export?pnu=1111010100100010000`
+설명:
+- CSV 다운로드 (`pnu, area, current_price, previous_price, growth_rate`)
+
+응답 200:
+- `Content-Type: text/csv; charset=utf-8`
+
+## 6. 조회기록 API
+인증: 로그인 필수
+
+### POST `/history/query-logs`
+설명:
+- 개별조회/지도조회 결과를 저장하거나(3분 윈도우 내 중복 시) 최신 내용으로 병합한다.
+
+요청:
+```json
+{
+  "search_type": "map",
+  "pnu": "1111010100100010000",
+  "address_summary": "서울특별시 종로구 청운동 1",
+  "rows": []
+}
+```
+
+응답 201:
+```json
+{
+  "id": "log-uuid",
+  "search_type": "map",
+  "pnu": "1111010100100010000",
+  "address_summary": "서울특별시 종로구 청운동 1",
+  "result_count": 0,
+  "created_at": "2026-03-05T05:20:31.120000+00:00"
+}
+```
+
+### GET `/history/query-logs`
+쿼리:
+- `page` (기본 1)
+- `page_size` (기본 20, 최대 100)
+- `search_type` (`jibun|road|map`)
+- `sido` (주소 필터)
+- `sigungu` (주소 필터)
+- `sort_by` (`created_at|address_summary|search_type|result_count`)
+- `sort_order` (`asc|desc`)
+
+응답 200:
+```json
+{
+  "page": 1,
+  "page_size": 20,
+  "total_count": 132,
+  "total_pages": 7,
+  "items": [
+    {
+      "id": "log-uuid",
+      "search_type": "jibun",
+      "pnu": "1168011800109700000",
+      "address_summary": "서울특별시 강남구 도곡동 970",
+      "result_count": 12,
+      "created_at": "2026-03-05T05:19:10.230000+00:00"
+    }
+  ]
+}
+```
+
+### GET `/history/query-logs/{log_id}`
+응답 200:
+```json
+{
+  "id": "log-uuid",
+  "search_type": "jibun",
+  "pnu": "1168011800109700000",
+  "address_summary": "서울특별시 강남구 도곡동 970",
+  "result_count": 12,
+  "created_at": "2026-03-05T05:19:10.230000+00:00",
+  "rows": [
+    {
+      "기준년도": "2025",
+      "토지소재지": "서울특별시 강남구 도곡동",
+      "지번": "970",
+      "개별공시지가": "14,000,000 원/㎡",
+      "기준일자": "01월 01일",
+      "공시일자": "20250430",
+      "비고": ""
+    }
+  ]
+}
+```
+
+## 7. 오류 응답 형식
 FastAPI 기본 `detail` 형식을 사용한다.
 
 예시:
@@ -374,7 +647,24 @@ FastAPI 기본 `detail` 형식을 사용한다.
 - `ROAD_FILE_NOT_FOUND`
 - `ROAD_GEOCODE_FAILED`
 - `PARCEL_NOT_FOUND`
+- `PARCEL_COORDINATE_MISSING`
+- `INVALID_COORDINATE`
+- `INVALID_ADDRESS_QUERY`
+- `MAP_ADDRESS_NOT_FOUND`
+- `MAP_PNU_DATA_INVALID`
+- `INVALID_PNU`
 - `UNAUTHORIZED`
+- `INVALID_CREDENTIALS`
+- `EMAIL_ALREADY_EXISTS`
+- `EMAIL_REQUIRED`
+- `ACCOUNT_NOT_FOUND`
+- `VERIFICATION_NOT_FOUND`
+- `VERIFICATION_PURPOSE_MISMATCH`
+- `VERIFICATION_EMAIL_MISMATCH`
+- `VERIFICATION_USED`
+- `VERIFICATION_EXPIRED`
+- `VERIFICATION_ATTEMPTS_EXCEEDED`
+- `VERIFICATION_CODE_INVALID`
 - `BULK_FILE_INVALID`
 - `BULK_ROW_LIMIT_EXCEEDED`
 - `BULK_JOB_NOT_FOUND`
@@ -385,3 +675,4 @@ FastAPI 기본 `detail` 형식을 사용한다.
 - `PASSWORD_MISMATCH`
 - `PASSWORD_SAME`
 - `WITHDRAW_CONFIRM_INVALID`
+- `QUERY_LOG_NOT_FOUND`

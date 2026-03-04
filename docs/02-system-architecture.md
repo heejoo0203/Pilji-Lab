@@ -1,4 +1,4 @@
-# 시스템 아키텍처
+# 시스템 아키텍처 (v2.1.0)
 
 ## 1. 현재 아키텍처 (AS-IS, v1.0.0)
 - Frontend: Next.js 15 (App Router), TypeScript
@@ -8,13 +8,15 @@
 - External API: VWorld (주소 변환 + 개별공시지가)
 - 안정화 구성: EC2 고정 IP VWorld 프록시(`infra/vworld-proxy`)
 - Road Data: `docs/TN_SPRD_RDNM.txt` (도로명 자음/목록 필터링)
-- Client History: 브라우저 `localStorage`(개별조회 기록)
+- Query History: 서버 DB `query_logs` 영구 저장(개별조회/지도조회)
 
 ## 2. 주요 데이터 흐름
 ### 2.1 인증
 1. Web -> API `/api/v1/auth/*` 요청
-2. API가 사용자 검증 후 쿠키(`access_token`, `refresh_token`) 발급
-3. Web은 쿠키 기반으로 로그인 상태를 유지
+2. 회원가입 시 `email-availability` -> `recovery/send-code(signup)` -> `register` 순서로 검증
+3. API가 사용자 검증 후 쿠키(`access_token`, `refresh_token`) 발급
+4. Web은 쿠키 기반으로 로그인 상태를 유지
+5. 아이디 찾기(이름+연락처)는 `/auth/recovery/find-id/profile`로 마스킹 이메일을 응답
 
 ### 2.2 개별조회(지번/도로명)
 1. Web이 검색 조건을 `/api/v1/land/single`로 전송
@@ -22,7 +24,7 @@
 3. API가 VWorld API를 직접 호출
 4. 직접 호출 실패 시 EC2 프록시(`VWORLD_PROXY_URL`)로 자동 우회
 5. API가 연도별 최신 데이터만 선별해 내림차순 반환
-6. Web이 결과 테이블 렌더링, 로그인 사용자는 조회기록 저장
+6. Web이 결과 테이블 렌더링, 로그인 사용자는 API를 통해 조회기록 저장
 
 ### 2.3 도로명 선택기
 1. Web이 `/api/v1/land/road-initials`로 시/도, 시/군/구 요청
@@ -55,6 +57,7 @@
 - DB: Railway PostgreSQL
 - VWorld 우회: AWS EC2(Seoul) + Elastic IP + FastAPI Proxy
 - API 환경변수로 VWorld 키/도메인/CORS/프록시를 제어
+- 인증/메일 관련 환경변수(SMTP, 인증코드 정책)로 회원가입/복구 플로우를 제어
 - 운영 DB는 PostgreSQL + Alembic 마이그레이션으로 관리
 - 업로드/결과/프로필 이미지 저장 경로를 런타임에서 보존
 - 헬스체크: `GET /health`
