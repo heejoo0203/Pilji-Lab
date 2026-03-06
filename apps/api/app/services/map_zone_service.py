@@ -538,7 +538,7 @@ def _upsert_parcel_geometries(db: Session, features: list[_VWorldParcelFeature])
             text(
                 """
                 WITH geom_data AS (
-                  SELECT ST_SetSRID(ST_GeomFromGeoJSON(:geometry_json), 4326) AS geom
+                  SELECT ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(:geometry_json), 4326)) AS geom
                 ),
                 centroid AS (
                   SELECT
@@ -605,7 +605,8 @@ def _query_overlapped_parcels(
     where_pnu = ", ".join(placeholders)
 
     if _is_postgres(db):
-        db.execute(text("SET LOCAL statement_timeout = :timeout_ms"), {"timeout_ms": str(settings.map_zone_query_timeout_ms)})
+        timeout_ms = max(1000, int(settings.map_zone_query_timeout_ms))
+        db.execute(text(f"SET LOCAL statement_timeout = {timeout_ms}"))
 
     query = f"""
         WITH zone AS (

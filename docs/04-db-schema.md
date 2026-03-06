@@ -13,6 +13,7 @@
 - `20260305_0004`: `email_verifications` + `users` 약관 컬럼
 - `20260305_0005`: `users.phone_number`
 - `20260306_0006`: `zone_analyses`, `zone_analysis_parcels`
+- `20260306_0007`: `parcels.geom` 타입을 `MULTIPOLYGON`으로 변경(지적도 호환)
 
 ## 2. 테이블 상세
 ### 2.1 users
@@ -88,7 +89,7 @@
 - `price_previous` (BigInteger, NULL)
 - `updated_at` (DateTime(timezone=True), NOT NULL)
 - `geog` (Geography POINT, 4326, PostgreSQL 전용)
-- `geom` (Geometry POLYGON, 4326, PostgreSQL 전용)
+- `geom` (Geometry MULTIPOLYGON, 4326, PostgreSQL 전용)
 
 공간 인덱스(PostgreSQL):
 - `idx_parcels_geog_gist` (GIST on `geog`)

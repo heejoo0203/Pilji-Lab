@@ -15,6 +15,7 @@ autoLV/
           20260305_0004_add_email_verifications_and_terms.py
           20260305_0005_add_phone_number_to_users.py
           20260306_0006_add_zone_analysis_tables.py
+          20260306_0007_alter_parcels_geom_to_multipolygon.py
       app/
         api/
           auth.py
