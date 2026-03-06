@@ -209,6 +209,17 @@ function normalizeBase(base: string): string {
   return base.replace(/\/+$/, "");
 }
 
+function isLocalApiBase(base: string | null | undefined): boolean {
+  if (!base) return false;
+  try {
+    const parsed = new URL(base);
+    const hostname = parsed.hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".local");
+  } catch {
+    return false;
+  }
+}
+
 function resolveApiBases(): string[] {
   const envBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   const bases: string[] = [];
@@ -216,8 +227,13 @@ function resolveApiBases(): string[] {
   const hasProxy = Boolean(envBase);
   const hostname = isBrowser ? window.location.hostname.toLowerCase() : "";
   const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".local");
+  const preferDirectLocalApi = isLocalApiBase(envBase);
 
-  if (isBrowser && hasProxy) {
+  if (envBase && preferDirectLocalApi) {
+    bases.push(normalizeBase(envBase));
+  }
+
+  if (isBrowser && hasProxy && !preferDirectLocalApi) {
     bases.push(normalizeBase(window.location.origin));
   }
   if (envBase) {
