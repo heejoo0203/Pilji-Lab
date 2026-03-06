@@ -5,6 +5,7 @@ import io
 import json
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -30,7 +31,7 @@ from app.schemas.map import (
     MapZoneSummary,
     MapZoneUpdateRequest,
 )
-from app.services.map_service import _fetch_land_characteristics_latest, _to_text_or_none
+from app.services.map_service import _fetch_land_characteristics_latest, _get_redis_client, _to_text_or_none
 from app.services.vworld_service import call_vworld_json
 
 _PNU_PATTERN = re.compile(r"^\d{19}$")
@@ -382,6 +383,19 @@ def _prepare_zone_preview(db: Session, *, payload: MapZoneAnalyzeRequest) -> _Pr
     feature_map = _fetch_vworld_parcel_features(bbox)
     _upsert_parcel_geometries(db, list(feature_map.values()))
     overlapped = _query_overlapped_parcels(db, zone_wkt=zone_wkt, threshold=threshold, pnu_list=list(feature_map.keys()))
+    max_included_parcels = max(1, int(settings.map_zone_max_included_parcels))
+    if len(overlapped) > max_included_parcels:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ZONE_TOO_MANY_INCLUDED_PARCELS",
+                "message": (
+                    f"구역 내 포함 필지가 {len(overlapped):,}건으로 너무 많습니다. "
+                    f"현재는 최대 {max_included_parcels:,}필지까지 분석할 수 있습니다. "
+                    "구역을 더 작게 나눠 조회해 주세요."
+                ),
+            },
+        )
     land_metadata_map = _fetch_zone_land_metadata([row["pnu"] for row in overlapped])
     parcels = _compose_zone_parcels(overlapped, feature_map, land_metadata_map)
     summary = _calculate_summary(parcels)
@@ -567,70 +581,140 @@ def _validate_zone_geometry(db: Session, zone_wkt: str) -> None:
 
 
 def _fetch_vworld_parcel_features(bbox: tuple[float, float, float, float]) -> dict[str, _VWorldParcelFeature]:
-    min_lng, min_lat, max_lng, max_lat = bbox
-    geom_filter = f"BOX({min_lng:.12f},{min_lat:.12f},{max_lng:.12f},{max_lat:.12f})"
-    page_size = max(100, min(settings.map_zone_vworld_page_size, 1000))
+    return _fetch_vworld_parcel_features_recursive(bbox, depth=0)
+
+
+def _fetch_vworld_parcel_features_recursive(
+    bbox: tuple[float, float, float, float],
+    *,
+    depth: int,
+) -> dict[str, _VWorldParcelFeature]:
+    response, total_pages = _fetch_vworld_parcel_feature_page(bbox, page=1)
     max_pages = max(1, settings.map_zone_vworld_max_pages)
+    if total_pages <= max_pages:
+        return _collect_vworld_parcel_feature_pages(bbox, first_response=response, total_pages=total_pages)
 
-    feature_map: dict[str, _VWorldParcelFeature] = {}
-    current_page = 1
-    total_pages = 1
-
-    while current_page <= total_pages and current_page <= max_pages:
-        payload = call_vworld_json(
-            "/req/data",
-            {
-                "service": "data",
-                "request": "GetFeature",
-                "data": "LP_PA_CBND_BUBUN",
-                "version": "2.0",
-                "format": "json",
-                "geomFilter": geom_filter,
-                "size": str(page_size),
-                "page": str(current_page),
+    max_depth = max(0, int(settings.map_zone_bbox_split_max_depth))
+    if depth >= max_depth or _is_bbox_too_small(bbox):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "ZONE_TOO_MANY_FEATURE_PAGES",
+                "message": (
+                    f"구역 범위의 필지 수가 많아 단일 분석 한도를 초과했습니다. "
+                    f"구역을 더 작게 나눠 조회해 주세요. (pages={total_pages})"
+                ),
             },
         )
 
-        response = payload.get("response", {})
-        status_text = str(response.get("status", "")).upper()
-        if status_text != "OK":
-            error_text = ""
-            error = response.get("error")
-            if isinstance(error, dict):
-                error_text = str(error.get("text", "")).strip()
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail={"code": "VWORLD_ZONE_FEATURE_FAILED", "message": error_text or "지적도 데이터를 불러오지 못했습니다."},
-            )
-
-        page_info = response.get("page", {}) if isinstance(response.get("page"), dict) else {}
-        total_pages = int(page_info.get("total", 1) or 1)
-        if total_pages > max_pages:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "ZONE_TOO_MANY_FEATURE_PAGES",
-                    "message": f"구역 범위가 넓어 처리량이 큽니다. 구역을 더 작게 나눠 조회해 주세요. (pages={total_pages})",
-                },
-            )
-
-        features = _extract_feature_list(response)
-        for item in features:
-            feature = _parse_vworld_feature(item)
-            if feature is None:
-                continue
-            prev = feature_map.get(feature.pnu)
-            if prev is None:
-                feature_map[feature.pnu] = feature
-                continue
-            prev_year = prev.price_year or ""
-            next_year = feature.price_year or ""
-            if next_year >= prev_year:
-                feature_map[feature.pnu] = feature
-
-        current_page += 1
-
+    feature_map: dict[str, _VWorldParcelFeature] = {}
+    for child_bbox in _split_bbox_into_quadrants(bbox):
+        if _bbox_has_no_area(child_bbox):
+            continue
+        child_features = _fetch_vworld_parcel_features_recursive(child_bbox, depth=depth + 1)
+        _merge_vworld_feature_maps(feature_map, child_features)
     return feature_map
+
+
+def _collect_vworld_parcel_feature_pages(
+    bbox: tuple[float, float, float, float],
+    *,
+    first_response: dict[str, Any],
+    total_pages: int,
+) -> dict[str, _VWorldParcelFeature]:
+    feature_map: dict[str, _VWorldParcelFeature] = {}
+    _merge_vworld_feature_maps(feature_map, _parse_vworld_feature_response(first_response))
+
+    for current_page in range(2, total_pages + 1):
+        response, _ = _fetch_vworld_parcel_feature_page(bbox, page=current_page)
+        _merge_vworld_feature_maps(feature_map, _parse_vworld_feature_response(response))
+    return feature_map
+
+
+def _fetch_vworld_parcel_feature_page(
+    bbox: tuple[float, float, float, float],
+    *,
+    page: int,
+) -> tuple[dict[str, Any], int]:
+    min_lng, min_lat, max_lng, max_lat = bbox
+    geom_filter = f"BOX({min_lng:.12f},{min_lat:.12f},{max_lng:.12f},{max_lat:.12f})"
+    page_size = max(100, min(settings.map_zone_vworld_page_size, 1000))
+
+    payload = call_vworld_json(
+        "/req/data",
+        {
+            "service": "data",
+            "request": "GetFeature",
+            "data": "LP_PA_CBND_BUBUN",
+            "version": "2.0",
+            "format": "json",
+            "geomFilter": geom_filter,
+            "size": str(page_size),
+            "page": str(page),
+        },
+    )
+
+    response = payload.get("response", {})
+    status_text = str(response.get("status", "")).upper()
+    if status_text != "OK":
+        error_text = ""
+        error = response.get("error")
+        if isinstance(error, dict):
+            error_text = str(error.get("text", "")).strip()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "VWORLD_ZONE_FEATURE_FAILED", "message": error_text or "지적도 데이터를 불러오지 못했습니다."},
+        )
+
+    page_info = response.get("page", {}) if isinstance(response.get("page"), dict) else {}
+    total_pages = int(page_info.get("total", 1) or 1)
+    return response, total_pages
+
+
+def _parse_vworld_feature_response(response: dict[str, Any]) -> dict[str, _VWorldParcelFeature]:
+    feature_map: dict[str, _VWorldParcelFeature] = {}
+    for item in _extract_feature_list(response):
+        feature = _parse_vworld_feature(item)
+        if feature is None:
+            continue
+        prev = feature_map.get(feature.pnu)
+        if prev is None or (feature.price_year or "") >= (prev.price_year or ""):
+            feature_map[feature.pnu] = feature
+    return feature_map
+
+
+def _merge_vworld_feature_maps(
+    target: dict[str, _VWorldParcelFeature],
+    incoming: dict[str, _VWorldParcelFeature],
+) -> None:
+    for pnu, feature in incoming.items():
+        prev = target.get(pnu)
+        if prev is None or (feature.price_year or "") >= (prev.price_year or ""):
+            target[pnu] = feature
+
+
+def _split_bbox_into_quadrants(
+    bbox: tuple[float, float, float, float],
+) -> list[tuple[float, float, float, float]]:
+    min_lng, min_lat, max_lng, max_lat = bbox
+    mid_lng = (min_lng + max_lng) / 2
+    mid_lat = (min_lat + max_lat) / 2
+    return [
+        (min_lng, min_lat, mid_lng, mid_lat),
+        (mid_lng, min_lat, max_lng, mid_lat),
+        (min_lng, mid_lat, mid_lng, max_lat),
+        (mid_lng, mid_lat, max_lng, max_lat),
+    ]
+
+
+def _bbox_has_no_area(bbox: tuple[float, float, float, float]) -> bool:
+    min_lng, min_lat, max_lng, max_lat = bbox
+    return max_lng <= min_lng or max_lat <= min_lat
+
+
+def _is_bbox_too_small(bbox: tuple[float, float, float, float]) -> bool:
+    min_lng, min_lat, max_lng, max_lat = bbox
+    return abs(max_lng - min_lng) < 1e-6 or abs(max_lat - min_lat) < 1e-6
 
 
 def _extract_feature_list(response: dict[str, Any]) -> list[dict[str, Any]]:
@@ -918,15 +1002,90 @@ def _fetch_saved_zone_parcel_metadata(db: Session, pnu_list: list[str]) -> dict[
 
 def _fetch_zone_land_metadata(pnu_list: list[str]) -> dict[str, dict[str, str | None]]:
     metadata_map: dict[str, dict[str, str | None]] = {}
+    missing_pnu_list: list[str] = []
+    redis_client = _get_redis_client()
+
     for pnu in dict.fromkeys(pnu_list):
         if not pnu:
             continue
-        details = _fetch_land_characteristics_latest(pnu) or {}
-        metadata_map[pnu] = {
-            "land_category_name": _to_text_or_none(details.get("lndcgrCodeNm")),
-            "purpose_area_name": _to_text_or_none(details.get("prposAreaNm") or details.get("prposArea1Nm")),
-        }
+        cached = _load_zone_land_metadata_from_cache(redis_client, pnu)
+        if cached is not None:
+            metadata_map[pnu] = cached
+            continue
+        missing_pnu_list.append(pnu)
+
+    sync_limit = max(0, int(settings.map_zone_land_metadata_sync_limit))
+    if sync_limit == 0 or not missing_pnu_list:
+        return metadata_map
+
+    fetch_targets = missing_pnu_list[:sync_limit]
+    worker_count = max(1, min(int(settings.map_zone_land_metadata_workers), len(fetch_targets)))
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        future_map = {executor.submit(_fetch_single_zone_land_metadata, pnu): pnu for pnu in fetch_targets}
+        for future in as_completed(future_map):
+            pnu = future_map[future]
+            try:
+                metadata = future.result()
+            except Exception:
+                metadata = {"land_category_name": None, "purpose_area_name": None}
+            metadata_map[pnu] = metadata
+            _store_zone_land_metadata_in_cache(redis_client, pnu, metadata)
+
     return metadata_map
+
+
+def _fetch_single_zone_land_metadata(pnu: str) -> dict[str, str | None]:
+    details = _fetch_land_characteristics_latest(pnu) or {}
+    return {
+        "land_category_name": _to_text_or_none(details.get("lndcgrCodeNm")),
+        "purpose_area_name": _to_text_or_none(details.get("prposAreaNm") or details.get("prposArea1Nm")),
+    }
+
+
+def _land_metadata_cache_key(pnu: str) -> str:
+    return f"map:zone-land-meta:{pnu}"
+
+
+def _load_zone_land_metadata_from_cache(
+    redis_client: Any,
+    pnu: str,
+) -> dict[str, str | None] | None:
+    if redis_client is None:
+        return None
+    try:
+        cached = redis_client.get(_land_metadata_cache_key(pnu))
+    except Exception:
+        return None
+    if not cached:
+        return None
+    try:
+        payload = json.loads(cached)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "land_category_name": _to_text_or_none(payload.get("land_category_name")),
+        "purpose_area_name": _to_text_or_none(payload.get("purpose_area_name")),
+    }
+
+
+def _store_zone_land_metadata_in_cache(
+    redis_client: Any,
+    pnu: str,
+    metadata: dict[str, str | None],
+) -> None:
+    if redis_client is None:
+        return
+    try:
+        redis_client.setex(
+            _land_metadata_cache_key(pnu),
+            settings.map_price_cache_ttl_seconds,
+            json.dumps(metadata, ensure_ascii=False),
+        )
+    except Exception:
+        return
 
 
 def _is_postgres(db: Session) -> bool:
