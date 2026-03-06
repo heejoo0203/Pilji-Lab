@@ -20,12 +20,14 @@ from app.models.zone_analysis_parcel import ZoneAnalysisParcel
 from app.schemas.map import (
     MapCoordinate,
     MapZoneAnalyzeRequest,
+    MapZoneDeleteResponse,
     MapZoneListItem,
     MapZoneListResponse,
     MapZoneParcelExcludeRequest,
     MapZoneParcelItem,
     MapZoneResponse,
     MapZoneSummary,
+    MapZoneUpdateRequest,
 )
 from app.services.vworld_service import call_vworld_json
 
@@ -123,16 +125,7 @@ def analyze_zone(
 
 
 def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneResponse:
-    analysis = (
-        db.query(ZoneAnalysis)
-        .filter(ZoneAnalysis.id == zone_id, ZoneAnalysis.user_id == user_id)
-        .first()
-    )
-    if not analysis:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "ZONE_ANALYSIS_NOT_FOUND", "message": "구역 분석 결과를 찾을 수 없습니다."},
-        )
+    analysis = _get_zone_analysis_or_404(db, user_id=user_id, zone_id=zone_id)
 
     rows = (
         db.query(ZoneAnalysisParcel)
@@ -149,6 +142,7 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
             area_sqm=float(row.area_sqm or 0.0),
             price_current=row.price_current,
             price_year=row.price_year,
+            estimated_total_price=_calculate_estimated_total_price(row.area_sqm, row.price_current),
             overlap_ratio=round(float(row.overlap_ratio or 0.0), 4),
             included=bool(row.included),
             counted_in_summary=bool(
@@ -173,7 +167,7 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
         created_at=_to_iso(analysis.created_at),
         updated_at=_to_iso(analysis.updated_at),
     )
-    return MapZoneResponse(summary=summary, parcels=parcels)
+    return MapZoneResponse(summary=summary, coordinates=_zone_wkt_to_coordinates(analysis.zone_wkt), parcels=parcels)
 
 
 def list_zone_analyses(db: Session, *, user_id: str, page: int, page_size: int) -> MapZoneListResponse:
@@ -189,7 +183,7 @@ def list_zone_analyses(db: Session, *, user_id: str, page: int, page_size: int) 
     rows = (
         db.query(ZoneAnalysis)
         .filter(ZoneAnalysis.user_id == user_id)
-        .order_by(ZoneAnalysis.created_at.desc())
+        .order_by(ZoneAnalysis.updated_at.desc(), ZoneAnalysis.created_at.desc())
         .offset(offset)
         .limit(page_size)
         .all()
@@ -202,6 +196,7 @@ def list_zone_analyses(db: Session, *, user_id: str, page: int, page_size: int) 
             parcel_count=int(row.parcel_count),
             assessed_total_price=int(row.assessed_total_price),
             created_at=_to_iso(row.created_at),
+            updated_at=_to_iso(row.updated_at),
         )
         for row in rows
     ]
@@ -222,15 +217,8 @@ def exclude_zone_parcels(
     payload: MapZoneParcelExcludeRequest,
 ) -> MapZoneResponse:
     analysis = (
-        db.query(ZoneAnalysis)
-        .filter(ZoneAnalysis.id == zone_id, ZoneAnalysis.user_id == user_id)
-        .first()
+        _get_zone_analysis_or_404(db, user_id=user_id, zone_id=zone_id)
     )
-    if not analysis:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "ZONE_ANALYSIS_NOT_FOUND", "message": "구역 분석 결과를 찾을 수 없습니다."},
-        )
 
     pnu_list = [pnu.strip() for pnu in payload.pnu_list if pnu.strip()]
     if not pnu_list:
@@ -266,6 +254,33 @@ def exclude_zone_parcels(
     return get_zone_detail(db, user_id=user_id, zone_id=zone_id)
 
 
+def update_zone_name(
+    db: Session,
+    *,
+    user_id: str,
+    zone_id: str,
+    payload: MapZoneUpdateRequest,
+) -> MapZoneResponse:
+    analysis = _get_zone_analysis_or_404(db, user_id=user_id, zone_id=zone_id)
+    analysis.zone_name = _normalize_zone_name(payload.zone_name)
+    analysis.updated_at = datetime.now(timezone.utc)
+    db.add(analysis)
+    db.commit()
+    return get_zone_detail(db, user_id=user_id, zone_id=zone_id)
+
+
+def delete_zone_analysis(
+    db: Session,
+    *,
+    user_id: str,
+    zone_id: str,
+) -> MapZoneDeleteResponse:
+    analysis = _get_zone_analysis_or_404(db, user_id=user_id, zone_id=zone_id)
+    db.delete(analysis)
+    db.commit()
+    return MapZoneDeleteResponse(zone_id=zone_id, deleted=True)
+
+
 def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
     response = get_zone_detail(db, user_id=user_id, zone_id=zone_id)
     buffer = io.StringIO()
@@ -280,6 +295,7 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
             "road_address",
             "area_sqm",
             "price_current",
+            "estimated_total_price",
             "price_year",
             "overlap_ratio",
             "included",
@@ -298,6 +314,7 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
                 row.road_address,
                 f"{row.area_sqm:.2f}",
                 row.price_current or "",
+                row.estimated_total_price or "",
                 row.price_year or "",
                 f"{row.overlap_ratio:.4f}",
                 "Y" if row.included else "N",
@@ -718,8 +735,54 @@ def _require_postgres(db: Session) -> None:
         )
 
 
+def _get_zone_analysis_or_404(db: Session, *, user_id: str, zone_id: str) -> ZoneAnalysis:
+    analysis = (
+        db.query(ZoneAnalysis)
+        .filter(ZoneAnalysis.id == zone_id, ZoneAnalysis.user_id == user_id)
+        .first()
+    )
+    if not analysis:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ZONE_ANALYSIS_NOT_FOUND", "message": "구역 분석 결과를 찾을 수 없습니다."},
+        )
+    return analysis
+
+
 def _is_postgres(db: Session) -> bool:
     return db.bind is not None and db.bind.dialect.name == "postgresql"
+
+
+def _zone_wkt_to_coordinates(zone_wkt: str) -> list[MapCoordinate]:
+    text_value = (zone_wkt or "").strip()
+    if not text_value.upper().startswith("POLYGON((") or not text_value.endswith("))"):
+        return []
+
+    serialized = text_value[len("POLYGON((") : -2]
+    coordinates: list[MapCoordinate] = []
+    for chunk in serialized.split(","):
+        parts = chunk.strip().split()
+        if len(parts) != 2:
+            continue
+        try:
+            lng = float(parts[0])
+            lat = float(parts[1])
+        except ValueError:
+            continue
+        coordinates.append(MapCoordinate(lat=lat, lng=lng))
+
+    if len(coordinates) >= 2:
+        first = coordinates[0]
+        last = coordinates[-1]
+        if abs(first.lat - last.lat) < 1e-9 and abs(first.lng - last.lng) < 1e-9:
+            coordinates = coordinates[:-1]
+    return coordinates
+
+
+def _calculate_estimated_total_price(area_sqm: float | None, price_current: int | None) -> int | None:
+    if area_sqm is None or price_current is None:
+        return None
+    return int(round(float(area_sqm) * int(price_current)))
 
 
 def _to_int(value: Any) -> int | None:

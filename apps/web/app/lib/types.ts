@@ -154,6 +154,7 @@ export type MapZoneParcelItem = {
   area_sqm: number;
   price_current: number | null;
   price_year: string | null;
+  estimated_total_price: number | null;
   overlap_ratio: number;
   included: boolean;
   counted_in_summary: boolean;
@@ -178,5 +179,29 @@ export type MapZoneSummary = {
 
 export type MapZoneResponse = {
   summary: MapZoneSummary;
+  coordinates: MapZoneCoordinate[];
   parcels: MapZoneParcelItem[];
+};
+
+export type MapZoneListItem = {
+  zone_id: string;
+  zone_name: string;
+  base_year: string | null;
+  parcel_count: number;
+  assessed_total_price: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MapZoneListResponse = {
+  page: number;
+  page_size: number;
+  total_count: number;
+  total_pages: number;
+  items: MapZoneListItem[];
+};
+
+export type MapZoneDeleteResponse = {
+  zone_id: string;
+  deleted: boolean;
 };

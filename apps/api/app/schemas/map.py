@@ -60,6 +60,10 @@ class MapZoneParcelExcludeRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=200)
 
 
+class MapZoneUpdateRequest(BaseModel):
+    zone_name: str = Field(min_length=1, max_length=100, description="변경할 구역 이름")
+
+
 class MapZoneParcelItem(BaseModel):
     pnu: str
     jibun_address: str
@@ -67,6 +71,7 @@ class MapZoneParcelItem(BaseModel):
     area_sqm: float
     price_current: int | None
     price_year: str | None
+    estimated_total_price: int | None
     overlap_ratio: float
     included: bool
     counted_in_summary: bool
@@ -91,6 +96,7 @@ class MapZoneSummary(BaseModel):
 
 class MapZoneResponse(BaseModel):
     summary: MapZoneSummary
+    coordinates: list[MapCoordinate]
     parcels: list[MapZoneParcelItem]
 
 
@@ -101,6 +107,7 @@ class MapZoneListItem(BaseModel):
     parcel_count: int
     assessed_total_price: int
     created_at: str
+    updated_at: str
 
 
 class MapZoneListResponse(BaseModel):
@@ -109,3 +116,8 @@ class MapZoneListResponse(BaseModel):
     total_count: int
     total_pages: int
     items: list[MapZoneListItem]
+
+
+class MapZoneDeleteResponse(BaseModel):
+    zone_id: str
+    deleted: bool

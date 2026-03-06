@@ -2,6 +2,8 @@
 
 import type {
   MapLandDetailsResponse,
+  MapZoneDeleteResponse,
+  MapZoneListResponse,
   MapLookupResponse,
   MapPriceRowsResponse,
   MapZoneCoordinate,
@@ -107,6 +109,19 @@ export async function fetchMapZone(zoneId: string): Promise<MapZoneResponse> {
   return payload as MapZoneResponse;
 }
 
+export async function fetchMapZones(page = 1, pageSize = 50): Promise<MapZoneListResponse> {
+  const query = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  const res = await apiFetch(`/api/v1/map/zones?${query.toString()}`, { method: "GET" });
+  const payload = (await safeJson(res)) as MapZoneListResponse | { detail?: unknown };
+  if (!res.ok) {
+    throw new Error(extractError(payload, "저장된 구역 목록을 불러오지 못했습니다."));
+  }
+  return payload as MapZoneListResponse;
+}
+
 export async function excludeMapZoneParcels(
   zoneId: string,
   pnuList: string[],
@@ -122,6 +137,28 @@ export async function excludeMapZoneParcels(
     throw new Error(extractError(payload, "필지 제외 처리에 실패했습니다."));
   }
   return payload as MapZoneResponse;
+}
+
+export async function renameMapZone(zoneId: string, zoneName: string): Promise<MapZoneResponse> {
+  const res = await apiFetch(`/api/v1/map/zones/${encodeURIComponent(zoneId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ zone_name: zoneName }),
+  });
+  const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
+  if (!res.ok) {
+    throw new Error(extractError(payload, "구역 이름 변경에 실패했습니다."));
+  }
+  return payload as MapZoneResponse;
+}
+
+export async function deleteMapZone(zoneId: string): Promise<MapZoneDeleteResponse> {
+  const res = await apiFetch(`/api/v1/map/zones/${encodeURIComponent(zoneId)}`, { method: "DELETE" });
+  const payload = (await safeJson(res)) as MapZoneDeleteResponse | { detail?: unknown };
+  if (!res.ok) {
+    throw new Error(extractError(payload, "구역 삭제에 실패했습니다."));
+  }
+  return payload as MapZoneDeleteResponse;
 }
 
 export async function downloadMapZoneCsv(zoneId: string): Promise<void> {

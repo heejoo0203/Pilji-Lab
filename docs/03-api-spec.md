@@ -523,6 +523,12 @@
     "created_at": "2026-03-06T01:23:45+00:00",
     "updated_at": "2026-03-06T01:23:45+00:00"
   },
+  "coordinates": [
+    { "lat": 37.57, "lng": 126.96 },
+    { "lat": 37.57, "lng": 126.98 },
+    { "lat": 37.56, "lng": 126.98 },
+    { "lat": 37.56, "lng": 126.96 }
+  ],
   "parcels": [
     {
       "pnu": "1111010100100010000",
@@ -530,6 +536,7 @@
       "road_address": "",
       "area_sqm": 123.4,
       "price_current": 12000000,
+      "estimated_total_price": 1480800000,
       "price_year": "2025",
       "overlap_ratio": 0.9543,
       "included": true,
@@ -548,6 +555,22 @@
 
 쿼리:
 - `page`, `page_size`
+
+응답 필드:
+- `updated_at`: 최근 수정 시각
+- `assessed_total_price`: 최신연도 기준 총 공시지가 합계
+
+### PATCH `/map/zones/{zone_id}`
+설명:
+- 저장된 구역 이름 수정
+- 인증: 로그인 필수(HttpOnly 쿠키)
+
+요청:
+```json
+{
+  "zone_name": "남대문 업무권 분석구역"
+}
+```
 
 ### GET `/map/zones/{zone_id}`
 설명:
@@ -570,6 +593,11 @@
 ### GET `/map/zones/{zone_id}/export`
 설명:
 - 구역 분석 결과 CSV 다운로드
+- 인증: 로그인 필수(HttpOnly 쿠키)
+
+### DELETE `/map/zones/{zone_id}`
+설명:
+- 저장된 구역 분석 결과 삭제
 - 인증: 로그인 필수(HttpOnly 쿠키)
 
 ## 5. 조회기록 API (`/history`)

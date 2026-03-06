@@ -7,14 +7,17 @@ import { useAuth } from "@/app/components/auth-provider";
 import { createSearchHistoryLog, fetchSearchHistoryDetail } from "@/app/lib/history-api";
 import {
   analyzeMapZone,
+  deleteMapZone,
   downloadMapLookupCsv,
   downloadMapZoneCsv,
   excludeMapZoneParcels,
-  fetchMapZone,
   fetchMapLandDetails,
   fetchMapLookup,
   fetchMapLookupByPnu,
   fetchMapPriceRows,
+  fetchMapZone,
+  fetchMapZones,
+  renameMapZone,
   searchMapLookupByAddress,
 } from "@/app/lib/map-api";
 import type {
@@ -22,6 +25,7 @@ import type {
   MapLandDetailsResponse,
   MapLookupResponse,
   MapZoneCoordinate,
+  MapZoneListItem,
   MapZoneResponse,
 } from "@/app/lib/types";
 
@@ -32,9 +36,11 @@ declare global {
         load?: (callback: () => void) => void;
         Map?: new (container: HTMLElement, options: Record<string, unknown>) => any;
         LatLng?: new (lat: number, lng: number) => any;
+        LatLngBounds?: new () => { extend: (latLng: any) => void };
         Marker?: new (options: Record<string, unknown>) => any;
         Polyline?: new (options: Record<string, unknown>) => any;
         Polygon?: new (options: Record<string, unknown>) => any;
+        CustomOverlay?: new (options: Record<string, unknown>) => any;
         MapTypeId?: { USE_DISTRICT?: unknown };
         event: {
           addListener: (target: any, type: string, handler: (event: any) => void) => void;
@@ -49,6 +55,7 @@ const KAKAO_SDK_ID = "autolv-kakao-map-sdk";
 const DEFAULT_CENTER_LAT = Number(process.env.NEXT_PUBLIC_MAP_CENTER_LAT ?? "37.5662952");
 const DEFAULT_CENTER_LNG = Number(process.env.NEXT_PUBLIC_MAP_CENTER_LNG ?? "126.9779451");
 const MAX_ZONE_POINTS = 100;
+const ZONE_LIST_PAGE_SIZE = 50;
 
 export default function MapPage() {
   return (
@@ -70,6 +77,7 @@ function MapPageClient() {
   const markerRef = useRef<any>(null);
   const zoneLineRef = useRef<any>(null);
   const zonePolygonRef = useRef<any>(null);
+  const zonePointOverlaysRef = useRef<any[]>([]);
   const debounceTimerRef = useRef<number | null>(null);
   const inFlightKeyRef = useRef<string>("");
   const lastResolvedKeyRef = useRef<string>("");
@@ -85,6 +93,9 @@ function MapPageClient() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [zoneLoading, setZoneLoading] = useState(false);
   const [zoneExcludeLoading, setZoneExcludeLoading] = useState(false);
+  const [zoneListLoading, setZoneListLoading] = useState(false);
+  const [zoneLibraryOpen, setZoneLibraryOpen] = useState(false);
+  const [zoneItemBusyId, setZoneItemBusyId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDistrictOverlay, setShowDistrictOverlay] = useState(false);
   const [addressQuery, setAddressQuery] = useState("");
@@ -92,6 +103,8 @@ function MapPageClient() {
   const [zonePoints, setZonePoints] = useState<MapZoneCoordinate[]>([]);
   const [selectedZonePnuSet, setSelectedZonePnuSet] = useState<Set<string>>(new Set());
   const [zoneResult, setZoneResult] = useState<MapZoneResponse | null>(null);
+  const [zoneList, setZoneList] = useState<MapZoneListItem[]>([]);
+  const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   const [message, setMessage] = useState("지도를 클릭하면 해당 필지의 공시지가를 조회합니다.");
   const [result, setResult] = useState<MapLookupResponse | null>(null);
   const [landDetails, setLandDetails] = useState<MapLandDetailsResponse | null>(null);
@@ -121,9 +134,14 @@ function MapPageClient() {
     if (viewMode === "basic") {
       setMessage("지도를 클릭하거나 좌측 상단 주소 입력으로 좌표를 조회할 수 있습니다.");
     } else {
-      setMessage("지도를 클릭해 구역 꼭짓점을 추가한 뒤 구역 분석을 실행해 주세요.");
+      setMessage("지도를 클릭해 구역을 그리고 분석하면 구역 내부 90% 이상 포함된 필지를 집계합니다.");
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    void loadZoneList();
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -197,6 +215,7 @@ function MapPageClient() {
 
         const payload = await fetchMapLookupByPnu(record.pnu);
         if (cancelled) return;
+        setViewMode("basic");
         applyLookupResult(payload, { persistHistory: false, customMessage: "조회기록에서 지도 결과를 불러왔습니다." });
       } catch (error) {
         if (cancelled) return;
@@ -220,11 +239,11 @@ function MapPageClient() {
         const payload = await fetchMapZone(zoneId);
         if (cancelled) return;
         loadedZoneIdRef.current = zoneId;
-        setViewMode("zone");
-        setZoneResult(payload);
-        setZoneName(payload.summary.zone_name);
-        setSelectedZonePnuSet(new Set());
-        setMessage("저장된 구역 분석 결과를 불러왔습니다.");
+        applyZoneResult(payload, {
+          customMessage: "저장된 구역 분석 결과를 불러왔습니다.",
+          fitToZone: true,
+          openLibrary: true,
+        });
       } catch (error) {
         if (cancelled) return;
         setMessage(error instanceof Error ? error.message : "구역 분석 결과를 불러오지 못했습니다.");
@@ -249,6 +268,11 @@ function MapPageClient() {
   }, [mapReady, zonePoints]);
 
   useEffect(() => {
+    if (!mapReady || !activeZoneId || !zoneResult?.coordinates?.length) return;
+    fitMapToPoints(zoneResult.coordinates);
+  }, [mapReady, activeZoneId, zoneResult]);
+
+  useEffect(() => {
     if (!mapReady) return;
     const kakaoMaps = window.kakao?.maps;
     const map = mapRef.current;
@@ -260,6 +284,18 @@ function MapPageClient() {
       map.removeOverlayMapTypeId?.(districtType);
     }
   }, [mapReady, showDistrictOverlay]);
+
+  const loadZoneList = async () => {
+    setZoneListLoading(true);
+    try {
+      const payload = await fetchMapZones(1, ZONE_LIST_PAGE_SIZE);
+      setZoneList(payload.items);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "저장된 구역 목록을 불러오지 못했습니다.");
+    } finally {
+      setZoneListLoading(false);
+    }
+  };
 
   const scheduleLookup = (lat: number, lng: number) => {
     if (debounceTimerRef.current) {
@@ -319,6 +355,9 @@ function MapPageClient() {
   };
 
   const appendZonePoint = (lat: number, lng: number) => {
+    setZoneResult(null);
+    setActiveZoneId(null);
+    setSelectedZonePnuSet(new Set());
     setZonePoints((prev) => {
       if (prev.length >= MAX_ZONE_POINTS) {
         setMessage(`구역 좌표는 최대 ${MAX_ZONE_POINTS}개까지 추가할 수 있습니다.`);
@@ -331,6 +370,9 @@ function MapPageClient() {
   };
 
   const undoZonePoint = () => {
+    setZoneResult(null);
+    setActiveZoneId(null);
+    setSelectedZonePnuSet(new Set());
     setZonePoints((prev) => {
       if (prev.length === 0) return prev;
       const next = prev.slice(0, -1);
@@ -346,6 +388,7 @@ function MapPageClient() {
   const clearZonePoints = () => {
     setZonePoints([]);
     setZoneResult(null);
+    setActiveZoneId(null);
     setSelectedZonePnuSet(new Set());
     clearZoneShapes();
     setMessage("구역 좌표를 초기화했습니다.");
@@ -366,12 +409,14 @@ function MapPageClient() {
     setMessage("구역 내 필지와 공시지가를 분석 중입니다...");
     try {
       const payload = await analyzeMapZone(name, zonePoints);
-      setZoneResult(payload);
-      setSelectedZonePnuSet(new Set());
-      setMessage(
-        `구역 분석 완료: 포함 ${payload.summary.parcel_count}필지, 기준연도 ${payload.summary.base_year || "-"}`
-      );
+      applyZoneResult(payload, {
+        customMessage: `구역 분석 완료: 구역 내 필지 ${payload.summary.parcel_count}건`,
+        fitToZone: false,
+        openLibrary: true,
+      });
+      await loadZoneList();
     } catch (error) {
+      setZoneResult(null);
       setMessage(error instanceof Error ? error.message : "구역 분석에 실패했습니다.");
     } finally {
       setZoneLoading(false);
@@ -385,13 +430,75 @@ function MapPageClient() {
     setZoneExcludeLoading(true);
     try {
       const payload = await excludeMapZoneParcels(zoneResult.summary.zone_id, Array.from(selectedZonePnuSet));
-      setZoneResult(payload);
-      setSelectedZonePnuSet(new Set());
-      setMessage("선택한 필지를 분석 결과에서 제외했습니다.");
+      applyZoneResult(payload, { customMessage: "선택한 필지를 분석 결과에서 제외했습니다.", fitToZone: false });
+      await loadZoneList();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "필지 제외 처리에 실패했습니다.");
     } finally {
       setZoneExcludeLoading(false);
+    }
+  };
+
+  const loadZoneById = async (targetZoneId: string, customMessage?: string) => {
+    setZoneItemBusyId(targetZoneId);
+    try {
+      const payload = await fetchMapZone(targetZoneId);
+      applyZoneResult(payload, {
+        customMessage: customMessage ?? "저장된 구역 분석 결과를 불러왔습니다.",
+        fitToZone: true,
+        openLibrary: true,
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "구역 분석 결과를 불러오지 못했습니다.");
+    } finally {
+      setZoneItemBusyId(null);
+    }
+  };
+
+  const renameZoneItem = async (item: MapZoneListItem) => {
+    const nextName = window.prompt("새 구역 이름을 입력해 주세요.", item.zone_name)?.trim();
+    if (!nextName || nextName === item.zone_name) return;
+
+    setZoneItemBusyId(item.zone_id);
+    try {
+      const payload = await renameMapZone(item.zone_id, nextName);
+      if (activeZoneId === item.zone_id) {
+        applyZoneResult(payload, {
+          customMessage: "구역 이름을 변경했습니다.",
+          fitToZone: false,
+          openLibrary: true,
+        });
+      } else {
+        setMessage("구역 이름을 변경했습니다.");
+      }
+      await loadZoneList();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "구역 이름 변경에 실패했습니다.");
+    } finally {
+      setZoneItemBusyId(null);
+    }
+  };
+
+  const deleteZoneItem = async (item: MapZoneListItem) => {
+    const confirmed = window.confirm(`"${item.zone_name}" 구역을 삭제하시겠습니까?`);
+    if (!confirmed) return;
+
+    setZoneItemBusyId(item.zone_id);
+    try {
+      await deleteMapZone(item.zone_id);
+      if (activeZoneId === item.zone_id) {
+        setActiveZoneId(null);
+        setZoneResult(null);
+        setZonePoints([]);
+        setSelectedZonePnuSet(new Set());
+        clearZoneShapes();
+      }
+      setMessage("구역을 삭제했습니다.");
+      await loadZoneList();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "구역 삭제에 실패했습니다.");
+    } finally {
+      setZoneItemBusyId(null);
     }
   };
 
@@ -437,6 +544,45 @@ function MapPageClient() {
     persistMapHistory(payload, payload.rows ?? []);
   };
 
+  const applyZoneResult = (
+    payload: MapZoneResponse,
+    options?: { customMessage?: string; fitToZone?: boolean; openLibrary?: boolean },
+  ) => {
+    setViewMode("zone");
+    setZoneResult(payload);
+    setActiveZoneId(payload.summary.zone_id);
+    setZoneName(payload.summary.zone_name);
+    setZonePoints(payload.coordinates);
+    setSelectedZonePnuSet(new Set());
+    if (options?.openLibrary) {
+      setZoneLibraryOpen(true);
+    }
+    if (options?.customMessage) {
+      setMessage(options.customMessage);
+    }
+    if (options?.fitToZone) {
+      window.setTimeout(() => {
+        fitMapToPoints(payload.coordinates);
+      }, 60);
+    }
+  };
+
+  const openZoneParcelInBasicView = async (pnu: string) => {
+    setViewMode("basic");
+    setLoading(true);
+    try {
+      const payload = await fetchMapLookupByPnu(pnu);
+      applyLookupResult(payload, {
+        persistHistory: false,
+        customMessage: "구역 결과에서 기본 조회로 전환했습니다.",
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "기본조회 전환에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const setMarker = (lat: number, lng: number) => {
     const kakaoMaps = window.kakao?.maps;
     if (!kakaoMaps?.LatLng || !kakaoMaps?.Marker || !mapRef.current) return;
@@ -456,6 +602,23 @@ function MapPageClient() {
     if (!kakaoMaps?.LatLng || !mapRef.current) return;
     const center = new kakaoMaps.LatLng(lat, lng);
     mapRef.current.setCenter?.(center);
+  };
+
+  const fitMapToPoints = (points: MapZoneCoordinate[]) => {
+    const kakaoMaps = window.kakao?.maps;
+    const map = mapRef.current;
+    if (!kakaoMaps?.LatLng || !map || points.length === 0) return;
+
+    if (points.length === 1 || !kakaoMaps.LatLngBounds) {
+      moveMapCenter(points[0].lat, points[0].lng);
+      return;
+    }
+
+    const bounds = new kakaoMaps.LatLngBounds();
+    for (const point of points) {
+      bounds.extend(new kakaoMaps.LatLng(point.lat, point.lng));
+    }
+    map.setBounds?.(bounds);
   };
 
   const toggleFullscreen = async () => {
@@ -538,11 +701,24 @@ function MapPageClient() {
   const redrawZoneShapes = () => {
     const kakaoMaps = window.kakao?.maps;
     const map = mapRef.current;
-    if (!kakaoMaps || !map) return;
+    if (!kakaoMaps || !map || !kakaoMaps.LatLng || !kakaoMaps.CustomOverlay) return;
+    const LatLng = kakaoMaps.LatLng;
+    const CustomOverlay = kakaoMaps.CustomOverlay;
 
     clearZoneShapes();
 
-    const path = zonePoints.map((point) => new kakaoMaps.LatLng!(point.lat, point.lng));
+    const path = zonePoints.map((point) => new LatLng(point.lat, point.lng));
+    zonePointOverlaysRef.current = zonePoints.map((point, index) => {
+      const overlay = new CustomOverlay({
+        map,
+        position: new LatLng(point.lat, point.lng),
+        yAnchor: 1.1,
+        content: buildZonePointMarker(index + 1, index === 0),
+      });
+      overlay.setMap?.(map);
+      return overlay;
+    });
+
     if (path.length >= 2 && kakaoMaps.Polyline) {
       zoneLineRef.current = new kakaoMaps.Polyline({
         map,
@@ -576,6 +752,10 @@ function MapPageClient() {
       zonePolygonRef.current.setMap?.(null);
       zonePolygonRef.current = null;
     }
+    for (const overlay of zonePointOverlaysRef.current) {
+      overlay?.setMap?.(null);
+    }
+    zonePointOverlaysRef.current = [];
   };
 
   return isLoggedIn ? (
@@ -607,6 +787,15 @@ function MapPageClient() {
             </p>
           </div>
           <div className="map-head-actions">
+            {viewMode === "zone" ? (
+              <button
+                type="button"
+                className={`map-ghost-btn ${zoneLibraryOpen ? "active" : ""}`}
+                onClick={() => setZoneLibraryOpen((prev) => !prev)}
+              >
+                {zoneLibraryOpen ? "저장 구역 닫기" : "저장 구역 보기"}
+              </button>
+            ) : null}
             <button type="button" className={`map-ghost-btn ${showDistrictOverlay ? "active" : ""}`} onClick={toggleDistrictOverlay}>
               {showDistrictOverlay ? "지적도 끄기" : "지적도 보기"}
             </button>
@@ -636,30 +825,42 @@ function MapPageClient() {
               </button>
             </form>
           ) : (
-            <div className="map-overlay-zone">
-              <input
-                className="map-address-input"
-                value={zoneName}
-                onChange={(event) => setZoneName(event.target.value)}
-                placeholder="구역 이름"
-              />
-              <div className="map-zone-tools">
-                <button type="button" className="map-overlay-btn" onClick={undoZonePoint} disabled={zonePoints.length === 0 || zoneLoading}>
-                  되돌리기
-                </button>
-                <button type="button" className="map-overlay-btn" onClick={clearZonePoints} disabled={zoneLoading}>
-                  초기화
-                </button>
-                <button
-                  type="button"
-                  className="map-overlay-btn map-overlay-btn-strong"
-                  onClick={() => void runZoneAnalyze()}
-                  disabled={zoneLoading || zonePoints.length < 3}
-                >
-                  {zoneLoading ? "분석 중..." : `구역 분석 (${zonePoints.length})`}
-                </button>
+            <>
+              <div className="map-overlay-zone">
+                <input
+                  className="map-address-input"
+                  value={zoneName}
+                  onChange={(event) => setZoneName(event.target.value)}
+                  placeholder="구역 이름"
+                />
+                <div className="map-zone-tools">
+                  <button type="button" className="map-overlay-btn" onClick={undoZonePoint} disabled={zonePoints.length === 0 || zoneLoading}>
+                    되돌리기
+                  </button>
+                  <button type="button" className="map-overlay-btn" onClick={clearZonePoints} disabled={zoneLoading}>
+                    초기화
+                  </button>
+                  <button
+                    type="button"
+                    className="map-overlay-btn map-overlay-btn-strong"
+                    onClick={() => void runZoneAnalyze()}
+                    disabled={zoneLoading || zonePoints.length < 3}
+                  >
+                    {zoneLoading ? "분석 중..." : `구역 분석 (${zonePoints.length})`}
+                  </button>
+                </div>
               </div>
-            </div>
+              <ZoneLibraryPanel
+                open={zoneLibraryOpen}
+                loading={zoneListLoading}
+                items={zoneList}
+                activeZoneId={activeZoneId}
+                busyZoneId={zoneItemBusyId}
+                onSelect={(item) => void loadZoneById(item.zone_id)}
+                onRename={(item) => void renameZoneItem(item)}
+                onDelete={(item) => void deleteZoneItem(item)}
+              />
+            </>
           )}
           <div ref={mapContainerRef} className="map-canvas" />
         </div>
@@ -757,11 +958,12 @@ function MapPageClient() {
             zoneResult={zoneResult}
             selectedPnuSet={selectedZonePnuSet}
             onSelect={(pnu, checked) => toggleZoneSelection(pnu, checked)}
-            onRowClick={(lat, lng) => {
+            onLocate={(lat, lng) => {
               if (lat === null || lng === null) return;
               setMarker(lat, lng);
               moveMapCenter(lat, lng);
             }}
+            onOpenBasic={(pnu) => void openZoneParcelInBasicView(pnu)}
           />
         )}
       </section>
@@ -786,52 +988,122 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ZoneLibraryPanel({
+  open,
+  loading,
+  items,
+  activeZoneId,
+  busyZoneId,
+  onSelect,
+  onRename,
+  onDelete,
+}: {
+  open: boolean;
+  loading: boolean;
+  items: MapZoneListItem[];
+  activeZoneId: string | null;
+  busyZoneId: string | null;
+  onSelect: (item: MapZoneListItem) => void;
+  onRename: (item: MapZoneListItem) => void;
+  onDelete: (item: MapZoneListItem) => void;
+}) {
+  return (
+    <aside className={`map-zone-library ${open ? "open" : ""}`}>
+      <div className="map-zone-library-head">
+        <h3>저장된 구역</h3>
+        <span>{items.length}건</span>
+      </div>
+      {loading ? <div className="map-zone-library-empty">목록을 불러오는 중입니다...</div> : null}
+      {!loading && items.length === 0 ? <div className="map-zone-library-empty">저장된 구역이 없습니다.</div> : null}
+      {!loading && items.length > 0 ? (
+        <div className="map-zone-library-list">
+          {items.map((item) => {
+            const busy = busyZoneId === item.zone_id;
+            return (
+              <div
+                key={item.zone_id}
+                className={`map-zone-library-item ${activeZoneId === item.zone_id ? "active" : ""}`}
+                onClick={() => {
+                  if (!busy) {
+                    onSelect(item);
+                  }
+                }}
+              >
+                <div className="map-zone-library-title-row">
+                  <strong>{item.zone_name}</strong>
+                  <span>{item.base_year || "-"}</span>
+                </div>
+                <div className="map-zone-library-meta">
+                  <span>필지 {formatNumber(item.parcel_count)}</span>
+                  <span>{formatDateTime(item.updated_at)}</span>
+                </div>
+                <div className="map-zone-library-meta">
+                  <span>총합 {formatNumber(item.assessed_total_price)}원</span>
+                </div>
+                <div className="map-zone-library-actions" onClick={(event) => event.stopPropagation()}>
+                  <button type="button" className="map-zone-mini-btn" disabled={busy} onClick={() => onRename(item)}>
+                    이름 수정
+                  </button>
+                  <button type="button" className="map-zone-mini-btn danger" disabled={busy} onClick={() => onDelete(item)}>
+                    삭제
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </aside>
+  );
+}
+
 function ZoneResultTable({
   zoneResult,
   selectedPnuSet,
   onSelect,
-  onRowClick,
+  onLocate,
+  onOpenBasic,
 }: {
   zoneResult: MapZoneResponse | null;
   selectedPnuSet: Set<string>;
   onSelect: (pnu: string, checked: boolean) => void;
-  onRowClick: (lat: number | null, lng: number | null) => void;
+  onLocate: (lat: number | null, lng: number | null) => void;
+  onOpenBasic: (pnu: string) => void;
 }) {
   if (!zoneResult) {
     return <div className="map-empty">구역 좌표를 선택하고 `구역 분석`을 실행해 주세요.</div>;
   }
 
   const { summary, parcels } = zoneResult;
+  const overlapPercent = Math.round((summary.overlap_threshold || 0.9) * 100);
   return (
     <>
       <div className="map-metrics">
         <MetricCard label="구역명" value={summary.zone_name} />
         <MetricCard label="기준연도(최신)" value={summary.base_year || "-"} />
         <MetricCard label="구역 면적(㎡)" value={formatArea(summary.zone_area_sqm)} />
-        <MetricCard label="포함 필지 수" value={formatNumber(summary.parcel_count)} />
-        <MetricCard label="계산 반영 필지 수" value={formatNumber(summary.counted_parcel_count)} />
-        <MetricCard label="수동 제외 필지 수" value={formatNumber(summary.excluded_parcel_count)} />
+        <MetricCard label="구역 내 필지 수" value={formatNumber(summary.parcel_count)} />
         <MetricCard label="필지 단가 합계(원/㎡)" value={formatNumber(summary.unit_price_sum)} />
         <MetricCard label="총 공시지가 합계(원)" value={formatNumber(summary.assessed_total_price)} />
       </div>
+      <p className="hint">필지 포함 기준: 구역 내부 {overlapPercent}% 이상 포함된 경우만 집계합니다.</p>
       <table className="data-table map-zone-table">
         <thead>
           <tr>
             <th className="center">선택</th>
             <th>지번 주소</th>
             <th>도로명 주소</th>
-            <th>PNU</th>
             <th className="right">면적(㎡)</th>
             <th className="right">공시지가(원/㎡)</th>
+            <th className="right">면적×공시지가</th>
             <th className="center">연도</th>
-            <th className="right">포함비율(%)</th>
           </tr>
         </thead>
         <tbody>
           {parcels.map((row) => {
             const selected = selectedPnuSet.has(row.pnu);
             return (
-              <tr key={row.pnu} className={!row.included ? "excluded" : ""} onClick={() => onRowClick(row.lat, row.lng)}>
+              <tr key={row.pnu} className={!row.included ? "excluded" : ""} onClick={() => onLocate(row.lat, row.lng)}>
                 <td className="center" onClick={(event) => event.stopPropagation()}>
                   <input
                     type="checkbox"
@@ -841,13 +1113,16 @@ function ZoneResultTable({
                     aria-label={`필지 선택 ${row.pnu}`}
                   />
                 </td>
-                <td>{row.jibun_address || "-"}</td>
+                <td onClick={(event) => event.stopPropagation()}>
+                  <button type="button" className="map-address-link" onClick={() => onOpenBasic(row.pnu)}>
+                    {row.jibun_address || "-"}
+                  </button>
+                </td>
                 <td>{row.road_address || "-"}</td>
-                <td>{row.pnu}</td>
                 <td className="right">{formatArea(row.area_sqm)}</td>
                 <td className="right">{formatNumber(row.price_current)}</td>
+                <td className="right">{formatNumber(row.estimated_total_price)}</td>
                 <td className="center">{row.price_year || "-"}</td>
-                <td className="right">{(row.overlap_ratio * 100).toFixed(2)}</td>
               </tr>
             );
           })}
@@ -916,6 +1191,13 @@ function toPointKey(lat: number, lng: number): string {
   return `${lat.toFixed(6)}:${lng.toFixed(6)}`;
 }
 
+function buildZonePointMarker(index: number, isFirst: boolean): HTMLDivElement {
+  const element = document.createElement("div");
+  element.className = `map-zone-point-marker ${isFirst ? "first" : ""}`;
+  element.innerHTML = `<span>${index}</span>`;
+  return element;
+}
+
 function formatNumber(value: number | null): string {
   if (value === null || value === undefined) return "-";
   return value.toLocaleString("ko-KR");
@@ -929,6 +1211,21 @@ function formatArea(value: number | null): string {
 function formatRate(value: number | null): string {
   if (value === null || value === undefined) return "-";
   return `${value.toFixed(2)}%`;
+}
+
+function formatDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 async function loadKakaoMapSdk(appKey: string): Promise<void> {

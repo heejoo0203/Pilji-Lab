@@ -9,9 +9,11 @@ from app.schemas.map import (
     MapLandDetailsResponse,
     MapLookupResponse,
     MapZoneAnalyzeRequest,
+    MapZoneDeleteResponse,
     MapZoneListResponse,
     MapZoneParcelExcludeRequest,
     MapZoneResponse,
+    MapZoneUpdateRequest,
     MapPriceRowsResponse,
 )
 from app.services.auth_service import get_user_from_access_token
@@ -25,10 +27,12 @@ from app.services.map_service import (
 )
 from app.services.map_zone_service import (
     analyze_zone,
+    delete_zone_analysis,
     exclude_zone_parcels,
     export_zone_csv,
     get_zone_detail,
     list_zone_analyses,
+    update_zone_name,
 )
 
 router = APIRouter(prefix="/api/v1/map", tags=["map"])
@@ -123,6 +127,25 @@ def exclude_zone_lookup_parcels(
     current_user: User = Depends(_get_current_user),
 ) -> MapZoneResponse:
     return exclude_zone_parcels(db=db, user_id=current_user.id, zone_id=zone_id, payload=payload)
+
+
+@router.patch("/zones/{zone_id}", response_model=MapZoneResponse)
+def update_zone_lookup(
+    zone_id: str,
+    payload: MapZoneUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_get_current_user),
+) -> MapZoneResponse:
+    return update_zone_name(db=db, user_id=current_user.id, zone_id=zone_id, payload=payload)
+
+
+@router.delete("/zones/{zone_id}", response_model=MapZoneDeleteResponse)
+def delete_zone_lookup(
+    zone_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_get_current_user),
+) -> MapZoneDeleteResponse:
+    return delete_zone_analysis(db=db, user_id=current_user.id, zone_id=zone_id)
 
 
 @router.get("/zones/{zone_id}/export")
