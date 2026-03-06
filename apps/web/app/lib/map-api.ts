@@ -17,7 +17,7 @@ export async function fetchMapLookup(lat: number, lng: number): Promise<MapLooku
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ lat, lng }),
-  });
+  }, { preferDirectLocalApi: true });
   const payload = (await safeJson(res)) as MapLookupResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "지도 조회에 실패했습니다."));
@@ -30,7 +30,7 @@ export async function searchMapLookupByAddress(address: string): Promise<MapLook
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ address }),
-  });
+  }, { preferDirectLocalApi: true });
   const payload = (await safeJson(res)) as MapLookupResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "주소 기반 지도 조회에 실패했습니다."));
@@ -40,7 +40,7 @@ export async function searchMapLookupByAddress(address: string): Promise<MapLook
 
 export async function fetchMapLookupByPnu(pnu: string): Promise<MapLookupResponse> {
   const query = new URLSearchParams({ pnu });
-  const res = await apiFetch(`/api/v1/map/by-pnu?${query.toString()}`, { method: "GET" });
+  const res = await apiFetch(`/api/v1/map/by-pnu?${query.toString()}`, { method: "GET" }, { preferDirectLocalApi: true });
   const payload = (await safeJson(res)) as MapLookupResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "PNU 기반 지도 조회에 실패했습니다."));
@@ -50,7 +50,7 @@ export async function fetchMapLookupByPnu(pnu: string): Promise<MapLookupRespons
 
 export async function fetchMapPriceRows(pnu: string): Promise<MapPriceRowsResponse> {
   const query = new URLSearchParams({ pnu });
-  const res = await apiFetch(`/api/v1/map/price-rows?${query.toString()}`, { method: "GET" });
+  const res = await apiFetch(`/api/v1/map/price-rows?${query.toString()}`, { method: "GET" }, { preferDirectLocalApi: true });
   const payload = (await safeJson(res)) as MapPriceRowsResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "연도별 공시지가 조회에 실패했습니다."));
@@ -60,7 +60,7 @@ export async function fetchMapPriceRows(pnu: string): Promise<MapPriceRowsRespon
 
 export async function fetchMapLandDetails(pnu: string): Promise<MapLandDetailsResponse> {
   const query = new URLSearchParams({ pnu });
-  const res = await apiFetch(`/api/v1/map/land-details?${query.toString()}`, { method: "GET" });
+  const res = await apiFetch(`/api/v1/map/land-details?${query.toString()}`, { method: "GET" }, { preferDirectLocalApi: true });
   const payload = (await safeJson(res)) as MapLandDetailsResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "토지 상세 정보 조회에 실패했습니다."));
@@ -70,7 +70,7 @@ export async function fetchMapLandDetails(pnu: string): Promise<MapLandDetailsRe
 
 export async function downloadMapLookupCsv(pnu: string): Promise<void> {
   const query = new URLSearchParams({ pnu });
-  const res = await apiFetch(`/api/v1/map/export?${query.toString()}`, { method: "GET" });
+  const res = await apiFetch(`/api/v1/map/export?${query.toString()}`, { method: "GET" }, { preferDirectLocalApi: true });
   if (!res.ok) {
     const payload = (await safeJson(res)) as { detail?: unknown };
     throw new Error(extractError(payload, "CSV 다운로드에 실패했습니다."));
@@ -92,7 +92,7 @@ export async function analyzeMapZone(
       coordinates,
       overlap_threshold: overlapThreshold,
     }),
-  });
+  }, { requireSameOriginAuth: true });
   const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "구역 분석에 실패했습니다."));
@@ -115,7 +115,7 @@ export async function saveMapZone(
       overlap_threshold: overlapThreshold,
       excluded_pnu_list: excludedPnuList,
     }),
-  });
+  }, { requireSameOriginAuth: true });
   const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "구역 저장에 실패했습니다."));
@@ -124,7 +124,11 @@ export async function saveMapZone(
 }
 
 export async function fetchMapZone(zoneId: string): Promise<MapZoneResponse> {
-  const res = await apiFetch(`/api/v1/map/zones/${encodeURIComponent(zoneId)}`, { method: "GET" });
+  const res = await apiFetch(
+    `/api/v1/map/zones/${encodeURIComponent(zoneId)}`,
+    { method: "GET" },
+    { requireSameOriginAuth: true },
+  );
   const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "구역 분석 결과를 불러오지 못했습니다."));
@@ -137,7 +141,11 @@ export async function fetchMapZones(page = 1, pageSize = 50): Promise<MapZoneLis
     page: String(page),
     page_size: String(pageSize),
   });
-  const res = await apiFetch(`/api/v1/map/zones?${query.toString()}`, { method: "GET" });
+  const res = await apiFetch(
+    `/api/v1/map/zones?${query.toString()}`,
+    { method: "GET" },
+    { requireSameOriginAuth: true },
+  );
   const payload = (await safeJson(res)) as MapZoneListResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "저장된 구역 목록을 불러오지 못했습니다."));
@@ -154,7 +162,7 @@ export async function excludeMapZoneParcels(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pnu_list: pnuList, reason }),
-  });
+  }, { requireSameOriginAuth: true });
   const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "필지 제외 처리에 실패했습니다."));
@@ -167,7 +175,7 @@ export async function renameMapZone(zoneId: string, zoneName: string): Promise<M
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ zone_name: zoneName }),
-  });
+  }, { requireSameOriginAuth: true });
   const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "구역 이름 변경에 실패했습니다."));
@@ -176,7 +184,11 @@ export async function renameMapZone(zoneId: string, zoneName: string): Promise<M
 }
 
 export async function deleteMapZone(zoneId: string): Promise<MapZoneDeleteResponse> {
-  const res = await apiFetch(`/api/v1/map/zones/${encodeURIComponent(zoneId)}`, { method: "DELETE" });
+  const res = await apiFetch(
+    `/api/v1/map/zones/${encodeURIComponent(zoneId)}`,
+    { method: "DELETE" },
+    { requireSameOriginAuth: true },
+  );
   const payload = (await safeJson(res)) as MapZoneDeleteResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "구역 삭제에 실패했습니다."));
@@ -185,7 +197,11 @@ export async function deleteMapZone(zoneId: string): Promise<MapZoneDeleteRespon
 }
 
 export async function downloadMapZoneCsv(zoneId: string): Promise<void> {
-  const res = await apiFetch(`/api/v1/map/zones/${encodeURIComponent(zoneId)}/export`, { method: "GET" });
+  const res = await apiFetch(
+    `/api/v1/map/zones/${encodeURIComponent(zoneId)}/export`,
+    { method: "GET" },
+    { requireSameOriginAuth: true },
+  );
   if (!res.ok) {
     const payload = (await safeJson(res)) as { detail?: unknown };
     throw new Error(extractError(payload, "구역 CSV 다운로드에 실패했습니다."));
@@ -220,21 +236,24 @@ function isLocalApiBase(base: string | null | undefined): boolean {
   }
 }
 
-function resolveApiBases(): string[] {
+function resolveApiBases(preferDirectLocalApi = false, requireSameOriginAuth = false): string[] {
   const envBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   const bases: string[] = [];
   const isBrowser = typeof window !== "undefined";
   const hasProxy = Boolean(envBase);
   const hostname = isBrowser ? window.location.hostname.toLowerCase() : "";
   const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".local");
-  const preferDirectLocalApi = isLocalApiBase(envBase);
+  const shouldPreferDirectLocalApi = preferDirectLocalApi && isLocalApiBase(envBase);
 
-  if (envBase && preferDirectLocalApi) {
-    bases.push(normalizeBase(envBase));
+  if (isBrowser && hasProxy) {
+    bases.push(normalizeBase(window.location.origin));
+  }
+  if (requireSameOriginAuth && isBrowser && hasProxy) {
+    return Array.from(new Set(bases.map(normalizeBase)));
   }
 
-  if (isBrowser && hasProxy && !preferDirectLocalApi) {
-    bases.push(normalizeBase(window.location.origin));
+  if (envBase && shouldPreferDirectLocalApi) {
+    bases.unshift(normalizeBase(envBase));
   }
   if (envBase) {
     bases.push(normalizeBase(envBase));
@@ -250,9 +269,16 @@ function resolveApiBases(): string[] {
   return Array.from(new Set(bases.map(normalizeBase)));
 }
 
-async function apiFetch(path: string, init: RequestInit): Promise<Response> {
+async function apiFetch(
+  path: string,
+  init: RequestInit,
+  options?: { preferDirectLocalApi?: boolean; requireSameOriginAuth?: boolean },
+): Promise<Response> {
   let lastError: unknown = null;
-  for (const base of resolveApiBases()) {
+  for (const base of resolveApiBases(
+    options?.preferDirectLocalApi ?? false,
+    options?.requireSameOriginAuth ?? false,
+  )) {
     try {
       return await fetch(`${base}${path}`, {
         ...init,
