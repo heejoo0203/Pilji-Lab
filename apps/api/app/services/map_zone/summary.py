@@ -12,29 +12,47 @@ from app.models.zone_analysis_parcel import ZoneAnalysisParcel
 from .domain import ZoneParcelComputed
 
 
-def calculate_summary(parcels: list[ZoneParcelComputed]) -> dict[str, Any]:
-    price_years = [item.price_year for item in parcels if item.price_year and item.price_current is not None]
+ZONE_ANALYSIS_ALGORITHM_VERSION = "zone-score-v3.0.0"
+
+
+def calculate_summary(
+    parcels: list[ZoneParcelComputed],
+    *,
+    included_pnu_set: set[str] | None = None,
+) -> dict[str, Any]:
+    included_set = included_pnu_set if included_pnu_set is not None else {item.pnu for item in parcels if item.selected_by_rule}
+    included_parcels = [item for item in parcels if item.pnu in included_set]
+    boundary_parcels = [item for item in parcels if item.pnu not in included_set and item.inclusion_mode == "boundary_candidate"]
+    excluded_parcels = [item for item in parcels if item.pnu not in included_set and item.inclusion_mode != "boundary_candidate"]
+
+    price_years = [item.price_year for item in included_parcels if item.price_year and item.price_current is not None]
     base_year = max(price_years) if price_years else None
 
-    parcel_count = len(parcels)
+    parcel_count = len(included_parcels)
     counted = [
         item
-        for item in parcels
+        for item in included_parcels
         if item.price_current is not None and item.price_year is not None and item.price_year == base_year
     ]
     counted_parcel_count = len(counted)
-    zone_area_sqm = round(sum(float(item.area_sqm or 0.0) for item in parcels), 2)
+    zone_area_sqm = round(sum(float(item.area_sqm or 0.0) for item in included_parcels), 2)
+    overlap_area_sqm_total = round(sum(float(item.overlap_area_sqm or 0.0) for item in included_parcels), 2)
     unit_price_sum = sum(int(item.price_current or 0) for item in counted)
     assessed_total_price = sum(int(round(item.area_sqm * int(item.price_current or 0))) for item in counted)
+    geometry_assessed_total_price = sum(int(round(item.overlap_area_sqm * int(item.price_current or 0))) for item in counted)
 
     return {
         "base_year": base_year,
         "zone_area_sqm": zone_area_sqm,
+        "overlap_area_sqm_total": overlap_area_sqm_total,
         "parcel_count": parcel_count,
+        "boundary_parcel_count": len(boundary_parcels),
         "counted_parcel_count": counted_parcel_count,
-        "excluded_parcel_count": 0,
+        "excluded_parcel_count": len(excluded_parcels),
         "unit_price_sum": unit_price_sum,
         "assessed_total_price": assessed_total_price,
+        "geometry_assessed_total_price": geometry_assessed_total_price,
+        "algorithm_version": ZONE_ANALYSIS_ALGORITHM_VERSION,
     }
 
 

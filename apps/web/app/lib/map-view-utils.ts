@@ -4,6 +4,8 @@ import type { LandResultRow, MapZoneResponse } from "@/app/lib/types";
 
 export function rebuildZonePreview(zoneResult: MapZoneResponse, parcels: MapZoneResponse["parcels"]): MapZoneResponse {
   const includedParcels = parcels.filter((item) => item.included);
+  const boundaryParcels = parcels.filter((item) => item.inclusion_mode === "boundary_candidate");
+  const excludedParcels = parcels.filter((item) => !item.included && item.inclusion_mode !== "boundary_candidate");
   const baseYearCandidates = includedParcels
     .filter((item) => item.price_current !== null && item.price_year)
     .map((item) => item.price_year as string);
@@ -12,7 +14,9 @@ export function rebuildZonePreview(zoneResult: MapZoneResponse, parcels: MapZone
     (item) => item.price_current !== null && item.price_year !== null && item.price_year === baseYear,
   );
   const assessedTotalPrice = countedParcels.reduce((sum, item) => sum + (item.estimated_total_price ?? 0), 0);
+  const geometryAssessedTotalPrice = countedParcels.reduce((sum, item) => sum + (item.geometry_estimated_total_price ?? 0), 0);
   const zoneAreaSqm = includedParcels.reduce((sum, item) => sum + (item.area_sqm ?? 0), 0);
+  const overlapAreaSqmTotal = includedParcels.reduce((sum, item) => sum + (item.overlap_area_sqm ?? 0), 0);
   const averageUnitPrice = zoneAreaSqm > 0 ? Math.round(assessedTotalPrice / zoneAreaSqm) : null;
   const totalBuildingCount = includedParcels.reduce((sum, item) => sum + (item.building_count ?? 0), 0);
   const agedBuildingCount = includedParcels.reduce((sum, item) => sum + (item.aged_building_count ?? 0), 0);
@@ -43,11 +47,14 @@ export function rebuildZonePreview(zoneResult: MapZoneResponse, parcels: MapZone
       ...zoneResult.summary,
       base_year: baseYear,
       zone_area_sqm: Math.round(zoneAreaSqm * 100) / 100,
+      overlap_area_sqm_total: Math.round(overlapAreaSqmTotal * 100) / 100,
       parcel_count: includedParcels.length,
+      boundary_parcel_count: boundaryParcels.length,
       counted_parcel_count: countedParcels.length,
-      excluded_parcel_count: parcels.length - includedParcels.length,
+      excluded_parcel_count: excludedParcels.length,
       average_unit_price: averageUnitPrice,
       assessed_total_price: assessedTotalPrice,
+      geometry_assessed_total_price: geometryAssessedTotalPrice,
       total_building_count: totalBuildingCount,
       aged_building_count: agedBuildingCount,
       aged_building_ratio: agedBuildingRatio,

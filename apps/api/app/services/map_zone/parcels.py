@@ -315,16 +315,53 @@ def query_overlapped_parcels(
             p.lng,
             COALESCE(p.area, ST_Area(p.geom::geography)) AS area_sqm,
             ST_AsGeoJSON(p.geom) AS geometry_geojson,
-            ST_Area(ST_Intersection(p.geom, z.geom)::geography) / NULLIF(ST_Area(p.geom::geography), 0) AS overlap_ratio
+            p.geom AS geom,
+            ST_Area(ST_Intersection(p.geom, z.geom)::geography) AS overlap_area_sqm,
+            ST_Area(ST_Intersection(p.geom, z.geom)::geography) / NULLIF(ST_Area(p.geom::geography), 0) AS overlap_ratio,
+            CASE WHEN ST_Contains(z.geom, ST_Centroid(p.geom)) THEN TRUE ELSE FALSE END AS centroid_in
           FROM parcels p
           CROSS JOIN zone z
           WHERE p.geom IS NOT NULL
             AND p.pnu IN ({", ".join(placeholders)})
             AND ST_Intersects(p.geom, z.geom)
+        ),
+        anchors AS (
+          SELECT pnu, geom
+          FROM candidates
+          WHERE overlap_ratio >= :threshold OR centroid_in = TRUE
+        ),
+        scored AS (
+          SELECT
+            c.pnu,
+            c.lat,
+            c.lng,
+            c.area_sqm,
+            c.geometry_geojson,
+            c.overlap_area_sqm,
+            c.overlap_ratio,
+            c.centroid_in,
+            CASE
+              WHEN EXISTS (
+                SELECT 1
+                FROM anchors a
+                WHERE a.pnu <> c.pnu
+                  AND ST_Intersects(a.geom, c.geom)
+              ) THEN TRUE
+              ELSE FALSE
+            END AS adjacency_bonus
+          FROM candidates c
         )
-        SELECT pnu, lat, lng, area_sqm, geometry_geojson, overlap_ratio
-        FROM candidates
-        WHERE overlap_ratio >= :threshold
+        SELECT
+          pnu,
+          lat,
+          lng,
+          area_sqm,
+          geometry_geojson,
+          overlap_area_sqm,
+          overlap_ratio,
+          centroid_in,
+          adjacency_bonus
+        FROM scored
         ORDER BY overlap_ratio DESC, pnu ASC
     """
     rows = db.execute(text(query), bind_params).mappings().all()
@@ -335,6 +372,8 @@ def compose_zone_parcels(
     rows: list[dict[str, Any]],
     feature_map: dict[str, VWorldParcelFeature],
     land_metadata_map: dict[str, dict[str, str | None]],
+    *,
+    threshold: float,
 ) -> list[ZoneParcelComputed]:
     parcels: list[ZoneParcelComputed] = []
     for row in rows:
@@ -344,13 +383,29 @@ def compose_zone_parcels(
         feature = feature_map.get(pnu)
         land_metadata = land_metadata_map.get(pnu, {})
         area_sqm = float(row.get("area_sqm") or 0.0)
+        overlap_area_sqm = float(row.get("overlap_area_sqm") or 0.0)
+        overlap_ratio = float(row.get("overlap_ratio") or 0.0)
+        centroid_in = bool(row.get("centroid_in"))
+        adjacency_bonus = bool(row.get("adjacency_bonus"))
+        confidence_score, selected_by_rule, inclusion_mode = _classify_zone_parcel(
+            overlap_ratio=overlap_ratio,
+            centroid_in=centroid_in,
+            adjacency_bonus=adjacency_bonus,
+            threshold=threshold,
+        )
         parcels.append(
             ZoneParcelComputed(
                 pnu=pnu,
                 lat=to_float(row.get("lat")),
                 lng=to_float(row.get("lng")),
                 area_sqm=round(max(0.0, area_sqm), 2),
-                overlap_ratio=float(row.get("overlap_ratio") or 0.0),
+                overlap_area_sqm=round(max(0.0, overlap_area_sqm), 2),
+                overlap_ratio=round(overlap_ratio, 4),
+                centroid_in=centroid_in,
+                adjacency_bonus=adjacency_bonus,
+                selected_by_rule=selected_by_rule,
+                inclusion_mode=inclusion_mode,
+                confidence_score=confidence_score,
                 price_current=feature.price_current if feature else None,
                 price_year=feature.price_year if feature else None,
                 jibun_address=(feature.address if feature else "") or pnu,
@@ -361,6 +416,31 @@ def compose_zone_parcels(
             )
         )
     return parcels
+
+
+def _classify_zone_parcel(
+    *,
+    overlap_ratio: float,
+    centroid_in: bool,
+    adjacency_bonus: bool,
+    threshold: float,
+) -> tuple[float, bool, str]:
+    confidence_score = round(
+        min(
+            1.0,
+            (0.6 * max(0.0, min(overlap_ratio, 1.0)))
+            + (0.3 if centroid_in else 0.0)
+            + (0.1 if adjacency_bonus else 0.0),
+        ),
+        4,
+    )
+    if overlap_ratio >= threshold:
+        return confidence_score, True, "rule_overlap"
+    if confidence_score >= 0.8:
+        return confidence_score, True, "score_auto"
+    if confidence_score >= 0.5:
+        return confidence_score, False, "boundary_candidate"
+    return confidence_score, False, "excluded"
 
 
 def fetch_saved_zone_parcel_metadata(db: Session, pnu_list: list[str]) -> dict[str, str]:

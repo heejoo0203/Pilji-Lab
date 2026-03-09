@@ -1,4 +1,4 @@
-# API 명세 (v2.2.1)
+# API 명세 (v3.0 준비)
 
 기본 경로: `/api/v1`  
 인증: 쿠키 기반 JWT (`access_token`, `refresh_token`)
@@ -489,7 +489,7 @@
 
 ### POST `/map/zones/analyze`
 설명:
-- 지도에서 그린 폴리곤 영역을 분석해 포함 필지(90% 이상) 목록과 최신연도 기준 합계를 반환
+- 지도에서 그린 폴리곤 영역을 분석해 포함/경계/제외 필지와 최신연도 기준 합계를 반환
 - 인증: 로그인 필수(HttpOnly 쿠키)
 - 저장 전 미리보기 응답이며, 이 호출만으로는 DB에 저장되지 않는다.
 
@@ -517,11 +517,15 @@
     "base_year": "2025",
     "overlap_threshold": 0.9,
     "zone_area_sqm": 721.13,
+    "overlap_area_sqm_total": 655.41,
     "parcel_count": 128,
+    "boundary_parcel_count": 11,
     "counted_parcel_count": 126,
     "excluded_parcel_count": 0,
     "average_unit_price": 50646974,
     "assessed_total_price": 923456700000,
+    "geometry_assessed_total_price": 838102400000,
+    "algorithm_version": "zone-score-v3.0.0",
     "building_data_ready": true,
     "building_data_message": null,
     "total_building_count": 94,
@@ -551,10 +555,16 @@
       "purpose_area_name": "제2종일반주거지역",
       "geometry_geojson": "{\"type\":\"MultiPolygon\",\"coordinates\":[...]}",
       "area_sqm": 123.4,
+      "overlap_area_sqm": 117.8,
       "price_current": 12000000,
       "estimated_total_price": 1480800000,
+      "geometry_estimated_total_price": 1413600000,
       "price_year": "2025",
       "overlap_ratio": 0.9543,
+      "centroid_in": true,
+      "selected_by_rule": true,
+      "inclusion_mode": "rule_overlap",
+      "confidence_score": 0.93,
       "included": true,
       "counted_in_summary": true,
       "lat": 37.58,
@@ -565,6 +575,8 @@
       "site_area_sqm": 123.4,
       "total_floor_area_sqm": 266.2,
       "floor_area_ratio": 215.72,
+      "building_coverage_ratio": 58.31,
+      "household_count": 12,
       "primary_purpose_name": "제2종근린생활시설"
     }
   ]
@@ -572,10 +584,14 @@
 ```
 
 비고:
-- `summary.zone_area_sqm`는 사용자가 그린 폴리곤 면적이 아니라, 90% 포함 기준을 통과한 포함 필지의 `area_sqm` 합계다.
-- `parcels[].geometry_geojson`는 지도에서 포함 필지를 별도 색상으로 강조하기 위한 도형 데이터다.
+- `summary.zone_area_sqm`는 포함 필지 전체면적 합계다.
+- `summary.overlap_area_sqm_total`는 포함 필지의 교집합 면적 합계다.
+- `summary.assessed_total_price`는 `포함 필지 기준 총가치`, `summary.geometry_assessed_total_price`는 `구역 내부 기준 총가치`다.
+- `parcels[].geometry_geojson`는 지도에서 포함/경계 필지를 별도 색상으로 강조하기 위한 도형 데이터다.
 - `summary.total_floor_area_sqm / summary.total_site_area_sqm` 기준으로 평균 용적률을 계산한다.
 - `summary.undersized_parcel_ratio`는 기본적으로 `90㎡ 미만 필지 비율`이다.
+- `parcels[].inclusion_mode`는 `rule_overlap | score_auto | boundary_candidate | excluded | user_excluded` 중 하나다.
+- `parcels[].confidence_score`는 현재 규칙 기반 score이며, 향후 AI 추천 confidence와 분리될 수 있다.
 
 ### POST `/map/zones`
 설명:
@@ -603,7 +619,8 @@
   "summary": {
     "zone_id": "zone-uuid",
     "zone_name": "한강 북측 분석구역",
-    "is_saved": true
+    "is_saved": true,
+    "algorithm_version": "zone-score-v3.0.0"
   },
   "coordinates": [
     { "lat": 37.57, "lng": 126.96 },
@@ -613,6 +630,27 @@
   "parcels": []
 }
 ```
+
+### GET `/map/zones/{zone_id}/export?format=csv`
+설명:
+- 저장된 구역 분석 결과를 CSV로 다운로드
+- 인증: 로그인 필수(HttpOnly 쿠키)
+
+CSV 컬럼(주요):
+- `pnu`
+- `jibun_address`
+- `price_year`
+- `price_current`
+- `area_sqm`
+- `overlap_area_sqm`
+- `estimated_total_price`
+- `geometry_estimated_total_price`
+- `overlap_ratio`
+- `centroid_in`
+- `included`
+- `inclusion_mode`
+- `confidence_score`
+- `algorithm_version`
 
 ### GET `/map/zones`
 설명:

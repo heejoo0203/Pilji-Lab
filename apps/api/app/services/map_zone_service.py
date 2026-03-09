@@ -48,6 +48,7 @@ from app.services.map_zone.parcels import (
     upsert_parcel_geometries,
 )
 from app.services.map_zone.summary import (
+    ZONE_ANALYSIS_ALGORITHM_VERSION,
     calculate_average_unit_price,
     calculate_estimated_total_price,
     calculate_summary,
@@ -134,7 +135,11 @@ def save_zone_analysis(
     db.flush()
 
     for item in preview.parcels:
-        included = item.pnu not in excluded_pnu_set
+        included = item.selected_by_rule and item.pnu not in excluded_pnu_set
+        inclusion_mode = item.inclusion_mode if included else ("user_excluded" if item.selected_by_rule else item.inclusion_mode)
+        excluded_reason = None
+        if not included:
+            excluded_reason = "저장 전 사용자 제외" if item.selected_by_rule else "자동 제외"
         db.add(
             ZoneAnalysisParcel(
                 zone_analysis_id=analysis.id,
@@ -144,11 +149,16 @@ def save_zone_analysis(
                 land_category_name=item.land_category_name,
                 purpose_area_name=item.purpose_area_name,
                 area_sqm=item.area_sqm,
+                overlap_area_sqm=item.overlap_area_sqm,
                 price_current=item.price_current,
                 price_year=item.price_year,
                 overlap_ratio=item.overlap_ratio,
+                centroid_in=item.centroid_in,
+                selected_by_rule=item.selected_by_rule,
+                inclusion_mode=inclusion_mode,
+                confidence_score=item.confidence_score,
                 included=included,
-                excluded_reason=None if included else "저장 전 사용자 제외",
+                excluded_reason=excluded_reason,
                 excluded_at=None if included else preview.generated_at,
                 lat=item.lat,
                 lng=item.lng,
@@ -171,6 +181,7 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
     )
     base_year = analysis.base_year
     response_zone_area_sqm = round(sum(float(row.area_sqm or 0.0) for row in rows if row.included), 2)
+    response_overlap_area_total = round(sum(float(row.overlap_area_sqm or 0.0) for row in rows if row.included), 2)
     parcel_metadata_map = fetch_saved_zone_parcel_metadata(db, [row.pnu for row in rows])
     price_snapshot_map = _fetch_parcel_price_snapshot_map(db, [row.pnu for row in rows])
     missing_land_metadata_pnu = [row.pnu for row in rows if not row.land_category_name and not row.purpose_area_name]
@@ -188,10 +199,16 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
             purpose_area_name=row.purpose_area_name or live_land_metadata_map.get(row.pnu, {}).get("purpose_area_name"),
             geometry_geojson=parcel_metadata_map.get(row.pnu),
             area_sqm=float(row.area_sqm or 0.0),
+            overlap_area_sqm=float(row.overlap_area_sqm or 0.0),
             price_current=row.price_current,
             price_year=row.price_year,
             estimated_total_price=calculate_estimated_total_price(row.area_sqm, row.price_current),
+            geometry_estimated_total_price=calculate_estimated_total_price(row.overlap_area_sqm, row.price_current),
             overlap_ratio=round(float(row.overlap_ratio or 0.0), 4),
+            centroid_in=bool(row.centroid_in),
+            selected_by_rule=bool(row.selected_by_rule),
+            inclusion_mode=str(row.inclusion_mode or ("rule_overlap" if row.included else "excluded")),
+            confidence_score=round(float(row.confidence_score or 0.0), 4),
             included=bool(row.included),
             counted_in_summary=bool(
                 row.included and row.price_current is not None and row.price_year is not None and row.price_year == base_year
@@ -252,6 +269,12 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
         [item for item in parcels if item.included],
         metrics_by_pnu=building_batch.metrics_by_pnu,
     )
+    geometry_assessed_total_price = sum(
+        int(round(float(row.overlap_area_sqm or 0.0) * int(row.price_current or 0)))
+        for row in rows
+        if row.included and row.price_current is not None and row.price_year is not None and row.price_year == base_year
+    )
+    boundary_parcel_count = sum(1 for row in rows if str(row.inclusion_mode or "") == "boundary_candidate")
     summary = MapZoneSummary(
         zone_id=analysis.id,
         zone_name=analysis.zone_name,
@@ -259,7 +282,9 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
         base_year=analysis.base_year,
         overlap_threshold=round(float(analysis.overlap_threshold), 4),
         zone_area_sqm=response_zone_area_sqm,
+        overlap_area_sqm_total=response_overlap_area_total,
         parcel_count=int(analysis.parcel_count),
+        boundary_parcel_count=boundary_parcel_count,
         counted_parcel_count=int(analysis.counted_parcel_count),
         excluded_parcel_count=int(analysis.excluded_parcel_count),
         average_unit_price=calculate_average_unit_price(
@@ -267,6 +292,8 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
             zone_area_sqm=response_zone_area_sqm,
         ),
         assessed_total_price=int(analysis.assessed_total_price),
+        geometry_assessed_total_price=int(geometry_assessed_total_price),
+        algorithm_version=ZONE_ANALYSIS_ALGORITHM_VERSION,
         building_data_ready=building_batch.ready,
         building_data_message=building_batch.message,
         total_building_count=int(building_summary["total_building_count"]),
@@ -354,6 +381,7 @@ def exclude_zone_parcels(
         row.included = False
         row.excluded_at = now
         row.excluded_reason = (payload.reason or "사용자 수동 제외").strip()[:200] or "사용자 수동 제외"
+        row.inclusion_mode = "user_excluded"
         row.updated_at = now
         db.add(row)
 
@@ -402,8 +430,10 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
             "jibun_address",
             "road_address",
             "area_sqm",
+            "overlap_area_sqm",
             "price_current",
             "estimated_total_price",
+            "geometry_estimated_total_price",
             "price_year",
             "building_count",
             "aged_building_count",
@@ -412,8 +442,12 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
             "floor_area_ratio",
             "primary_purpose_name",
             "overlap_ratio",
+            "centroid_in",
+            "inclusion_mode",
+            "confidence_score",
             "included",
             "counted_in_summary",
+            "algorithm_version",
         ]
     )
 
@@ -427,8 +461,10 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
                 row.jibun_address,
                 row.road_address,
                 f"{row.area_sqm:.2f}",
+                f"{row.overlap_area_sqm:.2f}",
                 row.price_current or "",
                 row.estimated_total_price or "",
+                row.geometry_estimated_total_price or "",
                 row.price_year or "",
                 row.building_count,
                 row.aged_building_count,
@@ -437,8 +473,12 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
                 f"{row.floor_area_ratio:.2f}" if row.floor_area_ratio is not None else "",
                 row.primary_purpose_name or "",
                 f"{row.overlap_ratio:.4f}",
+                "Y" if row.centroid_in else "N",
+                row.inclusion_mode,
+                f"{row.confidence_score:.4f}",
                 "Y" if row.included else "N",
                 "Y" if row.counted_in_summary else "N",
+                response.summary.algorithm_version,
             ]
         )
 
@@ -473,20 +513,21 @@ def _prepare_zone_preview(db: Session, *, payload: MapZoneAnalyzeRequest) -> Pre
     upsert_parcel_geometries(db, list(feature_map.values()))
     overlapped = query_overlapped_parcels(db, zone_wkt=zone_wkt, threshold=threshold, pnu_list=list(feature_map.keys()))
     max_included_parcels = max(1, int(settings.map_zone_max_included_parcels))
-    if len(overlapped) > max_included_parcels:
+    land_metadata_map = fetch_zone_land_metadata([row["pnu"] for row in overlapped])
+    parcels = compose_zone_parcels(overlapped, feature_map, land_metadata_map, threshold=threshold)
+    predicted_included_count = sum(1 for item in parcels if item.selected_by_rule)
+    if predicted_included_count > max_included_parcels:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "ZONE_TOO_MANY_INCLUDED_PARCELS",
                 "message": (
-                    f"구역 내 포함 필지가 {len(overlapped):,}건으로 너무 많습니다. "
+                    f"구역 내 포함 후보 필지가 {predicted_included_count:,}건으로 너무 많습니다. "
                     f"현재는 최대 {max_included_parcels:,}필지까지 분석할 수 있습니다. "
                     "구역을 더 작게 나눠 조회해 주세요."
                 ),
             },
         )
-    land_metadata_map = fetch_zone_land_metadata([row["pnu"] for row in overlapped])
-    parcels = compose_zone_parcels(overlapped, feature_map, land_metadata_map)
     price_snapshot_map = _fetch_parcel_price_snapshot_map(db, [item.pnu for item in parcels])
     building_batch = fetch_building_register_metrics_batch(
         db,
@@ -502,6 +543,7 @@ def _prepare_zone_preview(db: Session, *, payload: MapZoneAnalyzeRequest) -> Pre
         item.price_previous = price_snapshot_map.get(item.pnu, {}).get("price_previous")
         item.growth_rate = _calculate_growth_rate(item.price_current, item.price_previous)
         item.aged_building_ratio = round((metrics.aged_building_count / metrics.building_count) * 100, 2) if metrics.building_count else None
+        item.site_area_sqm = metrics.site_area_sqm
         item.total_floor_area_sqm = metrics.total_floor_area_sqm
         item.floor_area_ratio = metrics.floor_area_ratio
         item.building_coverage_ratio = metrics.building_coverage_ratio
@@ -530,14 +572,13 @@ def _build_zone_response(
     is_saved: bool,
     included_pnu_set: set[str] | None = None,
 ) -> MapZoneResponse:
-    included_set = included_pnu_set or {item.pnu for item in preview.parcels}
+    included_set = included_pnu_set or {item.pnu for item in preview.parcels if item.selected_by_rule}
     included_parcels = [item for item in preview.parcels if item.pnu in included_set]
-    summary_values = calculate_summary(included_parcels)
+    summary_values = calculate_summary(preview.parcels, included_pnu_set=included_set)
     building_summary = calculate_zone_building_summary(
         included_parcels,
         metrics_by_pnu=preview.building_metrics_by_pnu,
     )
-    excluded_count = len(preview.parcels) - len(included_set)
 
     parcels = [
         MapZoneParcelItem(
@@ -548,10 +589,20 @@ def _build_zone_response(
             purpose_area_name=item.purpose_area_name,
             geometry_geojson=item.geometry_geojson,
             area_sqm=item.area_sqm,
+            overlap_area_sqm=item.overlap_area_sqm,
             price_current=item.price_current,
             price_year=item.price_year,
             estimated_total_price=calculate_estimated_total_price(item.area_sqm, item.price_current),
+            geometry_estimated_total_price=calculate_estimated_total_price(item.overlap_area_sqm, item.price_current),
             overlap_ratio=round(item.overlap_ratio, 4),
+            centroid_in=item.centroid_in,
+            selected_by_rule=item.selected_by_rule,
+            inclusion_mode=(
+                item.inclusion_mode
+                if item.pnu in included_set
+                else ("user_excluded" if item.selected_by_rule else item.inclusion_mode)
+            ),
+            confidence_score=item.confidence_score,
             included=item.pnu in included_set,
             counted_in_summary=bool(
                 item.pnu in included_set
@@ -583,14 +634,18 @@ def _build_zone_response(
         base_year=summary_values["base_year"],
         overlap_threshold=round(preview.threshold, 4),
         zone_area_sqm=round(summary_values["zone_area_sqm"], 2),
+        overlap_area_sqm_total=round(summary_values["overlap_area_sqm_total"], 2),
         parcel_count=summary_values["parcel_count"],
+        boundary_parcel_count=summary_values["boundary_parcel_count"],
         counted_parcel_count=summary_values["counted_parcel_count"],
-        excluded_parcel_count=excluded_count,
+        excluded_parcel_count=summary_values["excluded_parcel_count"],
         average_unit_price=calculate_average_unit_price(
             assessed_total_price=summary_values["assessed_total_price"],
             zone_area_sqm=float(summary_values["zone_area_sqm"]),
         ),
         assessed_total_price=summary_values["assessed_total_price"],
+        geometry_assessed_total_price=summary_values["geometry_assessed_total_price"],
+        algorithm_version=summary_values["algorithm_version"],
         building_data_ready=preview.building_data_ready,
         building_data_message=preview.building_data_message,
         total_building_count=int(building_summary["total_building_count"]),

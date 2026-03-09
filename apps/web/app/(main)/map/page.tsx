@@ -507,7 +507,7 @@ function MapPageClient() {
     try {
       const payload = await analyzeMapZone(name, zonePoints);
       applyZoneResult(payload, {
-        customMessage: `구역 분석 완료: 구역 내 필지 ${payload.summary.parcel_count}건, 저장하려면 '구역 저장'을 눌러 주세요.`,
+        customMessage: `구역 분석 완료: 확정 포함 ${payload.summary.parcel_count}건, 경계 후보 ${payload.summary.boundary_parcel_count}건입니다. 저장하려면 '구역 저장'을 눌러 주세요.`,
         fitToZone: false,
         openLibrary: true,
       });
@@ -1087,7 +1087,9 @@ function MapPageClient() {
                       {zoneResult ? (
                         <div className="map-side-metrics">
                           <MetricCard label="구역 내 필지 수" value={formatNumber(zoneResult.summary.parcel_count)} />
-                          <MetricCard label="총 공시지가 합계" value={formatNumber(zoneResult.summary.assessed_total_price)} />
+                          <MetricCard label="경계 필지 수" value={formatNumber(zoneResult.summary.boundary_parcel_count)} />
+                          <MetricCard label="필지 기준 총가치" value={formatNumber(zoneResult.summary.assessed_total_price)} />
+                          <MetricCard label="구역 내부 총가치" value={formatNumber(zoneResult.summary.geometry_assessed_total_price)} />
                           <MetricCard label="노후도(%)" value={formatNumber(zoneResult.summary.aged_building_ratio)} />
                           <MetricCard label="평균 용적률" value={formatNumber(zoneResult.summary.average_floor_area_ratio)} />
                         </div>

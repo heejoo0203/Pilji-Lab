@@ -1,4 +1,4 @@
-# 시스템 아키텍처 (v2.2.1)
+# 시스템 아키텍처 (v3.0 준비)
 
 ## 1. 아키텍처 개요
 - Frontend(Web): Next.js 15 (App Router), TypeScript, Tailwind
@@ -21,7 +21,7 @@
 - 페이지
   - `/features` (비로그인 기본 랜딩)
   - `/search` (개별조회)
-  - `/map` (지도조회, 로그인 필요)
+  - `/map` (지도조회, 기본조회는 비로그인 가능 / 구역조회는 로그인 필요)
   - `/files` (파일조회, 로그인 필요)
   - `/history` (조회기록, 로그인 필요)
   - `/mypage` (계정관리, 로그인 필요)
@@ -43,6 +43,8 @@
 - `query_logs`: 개별/지도 조회기록
 - `parcels`: 지도 조회 캐시 + 공간 질의 기초 데이터
 - `zone_analyses`, `zone_analysis_parcels`: 저장된 구역 분석 결과
+- `building_register_caches`: 건축물대장 정규화 캐시
+- `raw / normalized / serving` 3계층은 현재 일부만 반영되었고, v3 단계에서 확장 예정
 - 파일 스토리지
   - 업로드/결과: `apps/api/storage/bulk`
   - 프로필 이미지: `apps/api/storage/profile_images`
@@ -94,17 +96,26 @@
    - 면적 제한 검사(`ST_Area`)
    - VWorld 지적도 피처 조회(`/req/data`, `LP_PA_CBND_BUBUN`)
    - `parcels` 지오메트리 업서트
-   - PostGIS 교차 계산(`ST_Intersection`), 90% 이상 포함 필지 판정
+   - PostGIS 교차 계산(`ST_Intersection`)
+   - 필지별 `overlap_area_sqm`, `overlap_ratio`, `centroid_in`, `adjacency_bonus` 계산
+   - 규칙 기반 + 점수 기반 포함 판정
+     - `overlap_ratio >= threshold` -> 확정 포함
+     - `score >= 0.8` -> 자동 포함
+     - `0.5 <= score < 0.8` -> 경계 후보
+     - 그 외 -> 제외
    - 최신연도 기준 합계/면적 기반 금액 집계
+     - 포함 필지 기준 총가치
+     - 구역 내부(교집합) 기준 총가치
    - 건축물대장 API(`getBrTitleInfo`, 필요 시 `getBrRecapTitleInfo`) 조회
    - `building_register_caches` 캐시 적재
    - 노후도/총연면적/총대지면적/평균 용적률/과소필지 비율 계산
 4. 사용자가 `구역 저장`을 누르면 `/map/zones` 호출로 `zone_analyses`, `zone_analysis_parcels`에 영속 저장
 5. 프론트에서 요약 카드 + 필지 목록 + 선택 제외 + 저장 구역 사이드바 + CSV 다운로드 제공
+6. 결과 화면에서는 사실값/계산값/추정값 구분 안내를 함께 제공한다.
 
 ### 3.6 구역 정확도 향상 보조 계층 (TO-BE)
 1. 사용자가 폴리곤을 그리면 기본 PostGIS 분석이 먼저 실행된다.
-2. 기본 포함 규칙(`overlap_ratio >= 0.9`)으로 1차 포함/제외 필지를 확정한다.
+2. 기본 포함 규칙(`overlap_ratio >= 0.9`)과 score 기반 규칙으로 1차 포함/경계/제외 필지를 분류한다.
 3. 선택적으로 `필지 경계 스냅/보정` 계층이 실행되어 사용자 폴리곤을 인접 필지 경계 기준으로 보정한다.
 4. 경계 구간 필지(`0.6~0.95`, 인접 필지, 연속 지번 후보)를 대상으로 `추천 ML`이 포함/제외/검토 필요 점수를 계산한다.
 5. 프론트는 `규칙 기반 포함`과 `추천 포함 후보`를 구분해 보여주고, 사용자가 최종 확정한다.
@@ -114,6 +125,21 @@
 비고:
 - 최종 금액/면적 계산은 계속 PostGIS와 공식 공시지가 데이터가 담당한다.
 - AI 계층은 추천과 설명만 수행하고, 최종 값 계산 엔진을 대체하지 않는다.
+
+### 3.7 정확도 중심 데이터 계층 (TO-BE)
+1. `raw`
+   - VWorld 원문 응답 저장
+   - 건축물대장 원문 응답 저장
+2. `normalized`
+   - PNU 패딩/정규화
+   - 사용승인년도 숫자화
+   - 세대수/용적률/주용도 표준화
+3. `serving`
+   - 화면 조회용 캐시
+   - 집계/다운로드용 결과셋
+
+비고:
+- 운영 장애/이상치 분석과 재현성 확보를 위해 이 3계층 분리가 필요하다.
 
 ### 3.6 조회기록
 1. `/history/query-logs`로 최신순 목록 조회

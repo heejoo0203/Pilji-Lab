@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 import { MetricCard } from "@/app/components/map/metric-card";
 import { formatArea, formatNumber } from "@/app/lib/map-view-utils";
@@ -24,6 +24,19 @@ function getParcelAgeDisplay(parcel: MapZoneResponse["parcels"][number]): string
   return getParcelAgedLabel(parcel);
 }
 
+function getInclusionLabel(parcel: MapZoneResponse["parcels"][number]): string {
+  if (parcel.inclusion_mode === "boundary_candidate") return "경계 후보";
+  if (parcel.inclusion_mode === "user_excluded") return "수동 제외";
+  if (parcel.included) return "확정 포함";
+  return "제외";
+}
+
+function getConfidenceLabel(score: number): string {
+  if (score >= 0.9) return "높음";
+  if (score >= 0.7) return "보통";
+  return "낮음";
+}
+
 export function ZoneResultTable({
   zoneResult,
   selectedPnuSet,
@@ -38,6 +51,7 @@ export function ZoneResultTable({
   onOpenBasic: (parcel: MapZoneResponse["parcels"][number]) => void;
 }) {
   const [expandedPnuSet, setExpandedPnuSet] = useState<Set<string>>(new Set());
+  const [filterMode, setFilterMode] = useState<"all" | "included" | "boundary" | "excluded">("all");
 
   if (!zoneResult) {
     return <div className="map-empty">구역 좌표를 선택하고 `구역 분석`을 실행해 주세요.</div>;
@@ -45,6 +59,12 @@ export function ZoneResultTable({
 
   const { summary, parcels } = zoneResult;
   const overlapPercent = Math.round((summary.overlap_threshold || 0.9) * 100);
+  const visibleParcels = useMemo(() => {
+    if (filterMode === "included") return parcels.filter((row) => row.included);
+    if (filterMode === "boundary") return parcels.filter((row) => row.inclusion_mode === "boundary_candidate");
+    if (filterMode === "excluded") return parcels.filter((row) => !row.included && row.inclusion_mode !== "boundary_candidate");
+    return parcels;
+  }, [filterMode, parcels]);
 
   const toggleExpanded = (pnu: string) => {
     setExpandedPnuSet((prev) => {
@@ -63,10 +83,13 @@ export function ZoneResultTable({
       <div className="map-metrics">
         <MetricCard label="구역명" value={summary.zone_name} />
         <MetricCard label="기준연도(최신)" value={summary.base_year || "-"} />
-        <MetricCard label="구역 면적(㎡)" value={formatArea(summary.zone_area_sqm)} />
+        <MetricCard label="포함 필지 면적(㎡)" value={formatArea(summary.zone_area_sqm)} />
+        <MetricCard label="구역 내부 면적(㎡)" value={formatArea(summary.overlap_area_sqm_total)} />
         <MetricCard label="구역 내 필지 수" value={formatNumber(summary.parcel_count)} />
+        <MetricCard label="경계 필지 수" value={formatNumber(summary.boundary_parcel_count)} />
         <MetricCard label="평균 공시지가(원/㎡)" value={formatNumber(summary.average_unit_price)} />
-        <MetricCard label="총 공시지가 합계(원)" value={formatNumber(summary.assessed_total_price)} />
+        <MetricCard label="포함 필지 기준 총가치(원)" value={formatNumber(summary.assessed_total_price)} />
+        <MetricCard label="구역 내부 기준 총가치(원)" value={formatNumber(summary.geometry_assessed_total_price)} />
         <MetricCard label="건축물 수" value={formatNumber(summary.total_building_count)} />
         <MetricCard label="노후 건축물 수" value={formatNumber(summary.aged_building_count)} />
         <MetricCard label="노후도(%)" value={formatNumber(summary.aged_building_ratio)} />
@@ -77,8 +100,23 @@ export function ZoneResultTable({
         <MetricCard label="과소필지 비율(%)" value={formatNumber(summary.undersized_parcel_ratio)} />
       </div>
       <p className="hint">필지 포함 기준: 구역 내부 {overlapPercent}% 이상 포함된 경우만 집계하며, 계산 반영 필지는 지도에서 진하게 표시합니다.</p>
+      <p className="hint">값 구분: 공시지가·용도지역은 원문값, 총가치는 계산값, 경계 후보/세대수 보정은 추정 또는 보정값입니다.</p>
       <p className="hint">건축 지표 기준: 노후도는 사용승인 30년 이상, 과소필지는 90㎡ 미만 필지를 기준으로 계산합니다.</p>
       {summary.building_data_message ? <p className="hint">{summary.building_data_message}</p> : null}
+      <div className="map-zone-filter-row">
+        <button type="button" className={`lab-filter-chip ${filterMode === "all" ? "active" : ""}`} onClick={() => setFilterMode("all")}>
+          전체 {formatNumber(parcels.length)}
+        </button>
+        <button type="button" className={`lab-filter-chip ${filterMode === "included" ? "active" : ""}`} onClick={() => setFilterMode("included")}>
+          확정 포함 {formatNumber(summary.parcel_count)}
+        </button>
+        <button type="button" className={`lab-filter-chip ${filterMode === "boundary" ? "active" : ""}`} onClick={() => setFilterMode("boundary")}>
+          경계 후보 {formatNumber(summary.boundary_parcel_count)}
+        </button>
+        <button type="button" className={`lab-filter-chip ${filterMode === "excluded" ? "active" : ""}`} onClick={() => setFilterMode("excluded")}>
+          제외 {formatNumber(summary.excluded_parcel_count)}
+        </button>
+      </div>
       <div className="map-zone-table-wrap">
         <table className="data-table map-zone-table">
           <thead>
@@ -98,7 +136,7 @@ export function ZoneResultTable({
             </tr>
           </thead>
           <tbody>
-            {parcels.map((row) => {
+            {visibleParcels.map((row) => {
               const selected = selectedPnuSet.has(row.pnu);
               const expanded = expandedPnuSet.has(row.pnu);
               return (
@@ -138,12 +176,24 @@ export function ZoneResultTable({
                       <td colSpan={12}>
                         <div className="map-zone-detail-grid">
                           <div className="map-zone-detail-item">
-                            <span>지목</span>
-                            <strong>{row.land_category_name || "-"}</strong>
+                            <span>포함 판정</span>
+                            <strong>{getInclusionLabel(row)}</strong>
                           </div>
                           <div className="map-zone-detail-item">
-                            <span>사용승인년도</span>
-                            <strong>{row.average_approval_year || "-"}</strong>
+                            <span>신뢰도</span>
+                            <strong>{getConfidenceLabel(row.confidence_score)} ({formatPercent(row.confidence_score * 100)})</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>교집합 면적(㎡)</span>
+                            <strong>{formatArea(row.overlap_area_sqm)}</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>중심점 포함</span>
+                            <strong>{row.centroid_in ? "Y" : "N"}</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>지목</span>
+                            <strong>{row.land_category_name || "-"}</strong>
                           </div>
                           <div className="map-zone-detail-item">
                             <span>건축물 수</span>
@@ -152,6 +202,10 @@ export function ZoneResultTable({
                           <div className="map-zone-detail-item">
                             <span>노후 건물 수</span>
                             <strong>{formatNumber(row.aged_building_count)}</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>사용승인년도</span>
+                            <strong>{row.average_approval_year || "-"}</strong>
                           </div>
                           <div className="map-zone-detail-item">
                             <span>연도</span>

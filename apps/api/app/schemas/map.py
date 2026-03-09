@@ -76,10 +76,16 @@ class MapZoneParcelItem(BaseModel):
     purpose_area_name: str | None
     geometry_geojson: str | None
     area_sqm: float
+    overlap_area_sqm: float
     price_current: int | None
     price_year: str | None
     estimated_total_price: int | None
+    geometry_estimated_total_price: int | None = None
     overlap_ratio: float
+    centroid_in: bool = False
+    selected_by_rule: bool = False
+    inclusion_mode: str = "excluded"
+    confidence_score: float = 0.0
     included: bool
     counted_in_summary: bool
     lat: float | None
@@ -105,11 +111,15 @@ class MapZoneSummary(BaseModel):
     base_year: str | None
     overlap_threshold: float
     zone_area_sqm: float
+    overlap_area_sqm_total: float = 0.0
     parcel_count: int
+    boundary_parcel_count: int = 0
     counted_parcel_count: int
     excluded_parcel_count: int
     average_unit_price: int | None
     assessed_total_price: int
+    geometry_assessed_total_price: int = 0
+    algorithm_version: str = "zone-score-v3"
     building_data_ready: bool = True
     building_data_message: str | None = None
     total_building_count: int = 0

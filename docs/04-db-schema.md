@@ -1,4 +1,4 @@
-# 데이터 저장 구조 (v2.2.1)
+# 데이터 저장 구조 (v3.0 준비)
 
 ## 1. DB 런타임 구성
 - 로컬 개발 기본 DB: SQLite (`apps/api/autolv.db`)
@@ -15,6 +15,9 @@
 - `20260306_0006`: `zone_analyses`, `zone_analysis_parcels`
 - `20260306_0007`: `parcels.geom` 타입을 `MULTIPOLYGON`으로 변경(지적도 호환)
 - `20260307_0008`: `zone_analysis_parcels.land_category_name`, `zone_analysis_parcels.purpose_area_name`
+- `20260309_0009`: `building_register_caches`
+- `20260310_0010`: `building_register_caches` 추가 지표(`건폐율`, `세대수`, `연면적`)
+- `20260310_0011`: `zone_analysis_parcels` 정확도 필드(`overlap_area_sqm`, `centroid_in`, `selected_by_rule`, `inclusion_mode`, `confidence_score`)
 
 ## 2. 테이블 상세
 ### 2.1 users
@@ -126,9 +129,14 @@
 - `land_category_name` (String(100), NULL)
 - `purpose_area_name` (String(100), NULL)
 - `area_sqm` (Float, NOT NULL)
+- `overlap_area_sqm` (Float, NOT NULL)
 - `price_current` (BigInteger, NULL)
 - `price_year` (String(4), NULL)
 - `overlap_ratio` (Float, NOT NULL)
+- `centroid_in` (Boolean, NOT NULL)
+- `selected_by_rule` (Boolean, NOT NULL)
+- `inclusion_mode` (String(30), NOT NULL)
+- `confidence_score` (Float, NOT NULL)
 - `included` (Boolean, NOT NULL)
 - `excluded_at` (DateTime(timezone=True), NULL)
 - `excluded_reason` (String(200), NULL)
@@ -137,6 +145,12 @@
 - `created_at` (DateTime(timezone=True), NOT NULL)
 - `updated_at` (DateTime(timezone=True), NOT NULL)
 - Unique 제약: `uq_zone_analysis_parcel` (`zone_analysis_id`, `pnu`)
+
+비고:
+- `included`는 최종 반영 여부다.
+- `selected_by_rule`는 규칙/점수 기반 기본 선택 결과다.
+- `inclusion_mode`는 `rule_overlap | score_auto | boundary_candidate | excluded | user_excluded`를 사용한다.
+- `confidence_score`는 현재 규칙 기반 점수이며, 이후 AI 추천 점수와 분리될 수 있다.
 
 ### 2.8 building_register_caches
 - `id` (String(36), PK)
@@ -151,6 +165,8 @@
 - `total_floor_area_sqm` (Float, NULL)
 - `site_area_sqm` (Float, NULL)
 - `floor_area_ratio` (Float, NULL)
+- `building_coverage_ratio` (Float, NULL)
+- `household_count` (Integer, NULL)
 - `primary_purpose_name` (String(120), NULL)
 - `synced_at` (DateTime(timezone=True), NOT NULL, INDEX)
 - `updated_at` (DateTime(timezone=True), NOT NULL)
@@ -181,7 +197,7 @@
 5. 관리자 계정 시드 필요 시 `scripts/reset_db_and_seed_admin.py` 실행
 
 ## 6. 예정 스키마 확장 (v3.x)
-건축물대장 기반 노후도/용적률 분석을 위해 다음 확장을 권장한다.
+정확도 추적과 AI 보조 계층을 위해 다음 확장을 권장한다.
 
 ### 6.1 zone_building_metrics (예정)
 - `id` (String(36), PK)
@@ -213,6 +229,46 @@
 비고:
 - 최종 계산 결과 테이블이 아니라, 사용자 검토용 추천 캐시/이력 테이블이다.
 - 구역 분석 원본 계산값은 계속 `zone_analysis_parcels`와 `parcels`가 기준이 된다.
+
+### 6.5 vworld_raw_payloads (예정)
+- `id` (String(36), PK)
+- `source_path` (String(120), NOT NULL, INDEX)
+- `request_key` (String(255), NOT NULL, INDEX)
+- `request_params_json` (Text, NOT NULL)
+- `response_body` (Text, NOT NULL)
+- `fetched_at` (DateTime(timezone=True), NOT NULL, INDEX)
+
+비고:
+- VWorld 원문 응답 보관용 raw 계층이다.
+- 추후 값 재현, 장애 분석, 정규화 로직 회귀 검증에 사용한다.
+
+### 6.6 building_register_raw_payloads (예정)
+- `id` (String(36), PK)
+- `pnu` (String(19), NOT NULL, INDEX)
+- `endpoint_name` (String(80), NOT NULL, INDEX)
+- `request_params_json` (Text, NOT NULL)
+- `response_body` (Text, NOT NULL)
+- `fetched_at` (DateTime(timezone=True), NOT NULL, INDEX)
+
+비고:
+- 건축물대장 표제부/총괄표제부/전유부 원문 저장용 raw 계층이다.
+
+### 6.7 parcel_serving_snapshots (예정)
+- `id` (String(36), PK)
+- `pnu` (String(19), NOT NULL, INDEX)
+- `base_year` (String(4), NOT NULL, INDEX)
+- `price_current` (BigInteger, NULL)
+- `price_previous` (BigInteger, NULL)
+- `land_category_name` (String(100), NULL)
+- `purpose_area_name` (String(100), NULL)
+- `area_sqm` (Float, NULL)
+- `source_version` (String(50), NOT NULL)
+- `algorithm_version` (String(50), NOT NULL)
+- `created_at` (DateTime(timezone=True), NOT NULL)
+
+비고:
+- 화면/다운로드/리포트에 바로 쓰는 serving 계층이다.
+- 동일 기준연도 기준의 재현성 확보용이다.
 
 ### 6.3 zone_ai_feedback (예정)
 - `id` (String(36), PK)

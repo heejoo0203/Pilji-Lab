@@ -2308,6 +2308,31 @@ body::before {
   background: rgba(255, 255, 255, 0.96);
 }
 
+.map-zone-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 18px;
+}
+
+.lab-filter-chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(18, 59, 102, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--lab-ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lab-filter-chip.active {
+  border-color: rgba(31, 95, 175, 0.28);
+  background: rgba(31, 95, 175, 0.1);
+  color: var(--lab-primary);
+}
+
 .map-zone-table thead th,
 .data-table thead th {
   background: rgba(241, 246, 250, 0.94);

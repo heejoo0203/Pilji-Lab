@@ -1,4 +1,4 @@
-# 폴더 구조 (v2.2.1)
+# 폴더 구조 (v3.0 준비)
 
 ## 1. 현재 구조
 ```text
@@ -18,6 +18,8 @@ autoLV/
           20260306_0007_alter_parcels_geom_to_multipolygon.py
           20260307_0008_add_land_metadata_to_zone_parcels.py
           20260309_0009_add_building_register_cache.py
+          20260310_0010_add_building_register_extra_metrics.py
+          20260310_0011_add_zone_accuracy_fields.py
       app/
         api/
           auth.py
@@ -193,6 +195,8 @@ autoLV/
 - 저장 구역/조회기록 삭제처럼 목록성 기능은 페이지 UI와 API 클라이언트 분리 원칙 유지
 - 구역 사업성 분석은 `map_zone/*`와 `building_register_service.py`로 분리해 공간 계산과 건축물대장 연동 책임을 분리
 - 건축물대장 원본 응답은 `building_register_caches`에 캐시하고, 구역 응답은 실시간 집계만 수행
+- v3 정확도 고도화 기준으로 `map_zone/*`는 geometry / parcels / buildings / summary 도메인 단위로 유지
+- 향후 raw / normalized / serving 계층 도입 시 서비스/모델도 같은 단위로 분리
 
 ## 5. 향후 확장 권장
 - 지도 폴리곤 분석 고도화 시 AI/보정 계층 추가 권장:
@@ -212,3 +216,7 @@ autoLV/
   - `app/models/zone_ai_suggestion.py`
   - `app/models/zone_ai_feedback.py`
   - `app/models/zone_ai_model_registry.py`
+- raw / normalized / serving 계층 확장 시 모듈 추가 권장:
+  - `app/models/vworld_raw_payload.py`
+  - `app/models/building_register_raw_payload.py`
+  - `app/models/parcel_serving_snapshot.py`

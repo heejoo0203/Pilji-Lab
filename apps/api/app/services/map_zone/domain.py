@@ -20,7 +20,13 @@ class ZoneParcelComputed:
     lat: float | None
     lng: float | None
     area_sqm: float
+    overlap_area_sqm: float
     overlap_ratio: float
+    centroid_in: bool
+    adjacency_bonus: bool
+    selected_by_rule: bool
+    inclusion_mode: str
+    confidence_score: float
     price_current: int | None
     price_year: str | None
     jibun_address: str

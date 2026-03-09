@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -24,9 +24,14 @@ class ZoneAnalysisParcel(Base):
     land_category_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     purpose_area_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     area_sqm: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    overlap_area_sqm: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     price_current: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     price_year: Mapped[str | None] = mapped_column(String(4), nullable=True)
     overlap_ratio: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    centroid_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    selected_by_rule: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    inclusion_mode: Mapped[str] = mapped_column(String(30), nullable=False, default="excluded")
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     included: Mapped[bool] = mapped_column(nullable=False, default=True)
     excluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     excluded_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
