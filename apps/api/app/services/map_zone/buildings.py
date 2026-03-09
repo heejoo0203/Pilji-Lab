@@ -18,6 +18,7 @@ def calculate_zone_building_summary(
     total_floor_area_sqm = 0.0
     total_site_area_sqm = 0.0
     undersized_parcel_count = 0
+    seen_building_sources: set[str] = set()
 
     for parcel in parcels:
         metrics = metrics_by_pnu.get(parcel.pnu)
@@ -25,6 +26,10 @@ def calculate_zone_building_summary(
             undersized_parcel_count += 1
         if metrics is None or not metrics.has_building_register:
             continue
+        source_key = (metrics.source_pnu or parcel.pnu).strip() or parcel.pnu
+        if source_key in seen_building_sources:
+            continue
+        seen_building_sources.add(source_key)
         total_building_count += metrics.building_count
         aged_building_count += metrics.aged_building_count
         approval_year_sum += metrics.approval_year_sum

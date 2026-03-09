@@ -23,6 +23,7 @@ _RESIDENTIAL_KEYWORDS = ("주택", "아파트", "다세대", "연립", "다가�
 @dataclass
 class BuildingRegisterMetrics:
     pnu: str
+    source_pnu: str | None = None
     has_building_register: bool = False
     building_count: int = 0
     aged_building_count: int = 0
@@ -73,7 +74,11 @@ def fetch_building_register_metrics_batch(
     except (ProgrammingError, OperationalError):
         db.rollback()
         cache_rows = []
-    metrics_by_pnu = {row.pnu: _cache_row_to_metrics(row) for row in cache_rows}
+    metrics_by_pnu = {
+        row.pnu: _cache_row_to_metrics(row)
+        for row in cache_rows
+        if bool(row.has_building_register)
+    }
 
     missing_pnu_list = [pnu for pnu in unique_pnu_list if pnu not in metrics_by_pnu]
     if not missing_pnu_list:
@@ -96,7 +101,8 @@ def fetch_building_register_metrics_batch(
             try:
                 metrics = future.result()
                 metrics_by_pnu[pnu] = metrics
-                fetched_rows.append(_metrics_to_cache_row(metrics, now=now))
+                if metrics.has_building_register and (metrics.source_pnu is None or metrics.source_pnu == metrics.pnu):
+                    fetched_rows.append(_metrics_to_cache_row(metrics, now=now))
             except Exception:
                 metrics_by_pnu[pnu] = BuildingRegisterMetrics(pnu=pnu)
                 errors.append(pnu)
@@ -125,13 +131,26 @@ def fetch_building_register_metrics_batch(
     except (ProgrammingError, OperationalError):
         db.rollback()
 
+    inherited_count = sum(
+        1
+        for metrics in metrics_by_pnu.values()
+        if metrics.has_building_register and metrics.source_pnu and metrics.source_pnu != metrics.pnu
+    )
+    missing_count = sum(1 for metrics in metrics_by_pnu.values() if not metrics.has_building_register)
+
     if errors:
+        note = _compose_building_batch_note(inherited_count=inherited_count, missing_count=missing_count)
+        base = f"건축물대장 일부 조회에 실패했습니다. ({len(errors)}필지)"
         return BuildingRegisterBatchResult(
             metrics_by_pnu=metrics_by_pnu,
             ready=False,
-            message=f"건축물대장 일부 조회에 실패했습니다. ({len(errors)}필지)",
+            message=f"{base} {note}".strip(),
         )
-    return BuildingRegisterBatchResult(metrics_by_pnu=metrics_by_pnu, ready=True, message=None)
+    return BuildingRegisterBatchResult(
+        metrics_by_pnu=metrics_by_pnu,
+        ready=True,
+        message=_compose_building_batch_note(inherited_count=inherited_count, missing_count=missing_count),
+    )
 
 
 def _is_building_api_configured() -> bool:
@@ -142,6 +161,7 @@ def _is_building_api_configured() -> bool:
 def _cache_row_to_metrics(row: BuildingRegisterCache) -> BuildingRegisterMetrics:
     return BuildingRegisterMetrics(
         pnu=row.pnu,
+        source_pnu=row.pnu,
         has_building_register=bool(row.has_building_register),
         building_count=int(row.building_count or 0),
         aged_building_count=int(row.aged_building_count or 0),
@@ -176,10 +196,19 @@ def _metrics_to_cache_row(metrics: BuildingRegisterMetrics, *, now: datetime) ->
 
 
 def _fetch_building_register_metrics_for_pnu(pnu: str, parcel_area_sqm: float | None) -> BuildingRegisterMetrics:
-    title_items = _fetch_building_items("getBrTitleInfo", pnu)
-    items = title_items
+    source_pnu = pnu
+    items = _fetch_building_items("getBrTitleInfo", pnu)
     if not items:
         items = _fetch_building_items("getBrRecapTitleInfo", pnu)
+
+    if not items:
+        fallback_pnu = _to_main_lot_pnu(pnu)
+        if fallback_pnu != pnu:
+            source_pnu = fallback_pnu
+            items = _fetch_building_items("getBrTitleInfo", fallback_pnu)
+            if not items:
+                items = _fetch_building_items("getBrRecapTitleInfo", fallback_pnu)
+
     if not items:
         return BuildingRegisterMetrics(pnu=pnu)
 
@@ -225,6 +254,7 @@ def _fetch_building_register_metrics_for_pnu(pnu: str, parcel_area_sqm: float | 
 
     return BuildingRegisterMetrics(
         pnu=pnu,
+        source_pnu=source_pnu,
         has_building_register=True,
         building_count=building_count,
         aged_building_count=aged_building_count,
@@ -240,12 +270,13 @@ def _fetch_building_register_metrics_for_pnu(pnu: str, parcel_area_sqm: float | 
 
 
 def _fetch_building_items(endpoint: str, pnu: str) -> list[dict[str, Any]]:
+    plat_gb_cd = _to_building_plat_gb_cd(pnu[10])
     response = _call_building_hub_json(
         endpoint,
         {
             "sigunguCd": pnu[:5],
             "bjdongCd": pnu[5:10],
-            "platGbCd": pnu[10],
+            "platGbCd": plat_gb_cd,
             "bun": pnu[11:15],
             "ji": pnu[15:19],
             "numOfRows": "100",
@@ -259,6 +290,24 @@ def _fetch_building_items(endpoint: str, pnu: str) -> list[dict[str, Any]]:
     if isinstance(items, list):
         return [item for item in items if isinstance(item, dict)]
     return []
+
+
+def _to_building_plat_gb_cd(raw: str) -> str:
+    normalized = (raw or "").strip()
+    if normalized == "1":
+        return "0"
+    if normalized == "2":
+        return "1"
+    return normalized or "0"
+
+
+def _to_main_lot_pnu(pnu: str) -> str:
+    if len(pnu) != 19:
+        return pnu
+    ji = pnu[15:19]
+    if ji == "0000":
+        return pnu
+    return f"{pnu[:15]}0000"
 
 
 def _call_building_hub_json(endpoint: str, params: dict[str, str]) -> dict[str, Any]:
@@ -340,3 +389,14 @@ def _to_positive_float(value: Any) -> float | None:
 
 def _is_residential_purpose(value: str) -> bool:
     return any(keyword in value for keyword in _RESIDENTIAL_KEYWORDS)
+
+
+def _compose_building_batch_note(*, inherited_count: int, missing_count: int) -> str | None:
+    notes: list[str] = []
+    if inherited_count > 0:
+        notes.append(f"직접 건축물대장이 없는 필지 {inherited_count}건은 대표 지번 기준으로 보정했습니다.")
+    if missing_count > 0:
+        notes.append(f"건축물대장이 연결되지 않은 필지 {missing_count}건은 건축 지표에서 제외했습니다.")
+    if not notes:
+        return None
+    return " ".join(notes)
