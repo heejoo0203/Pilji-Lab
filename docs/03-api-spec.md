@@ -575,7 +575,7 @@
 - `summary.zone_area_sqm`는 사용자가 그린 폴리곤 면적이 아니라, 90% 포함 기준을 통과한 포함 필지의 `area_sqm` 합계다.
 - `parcels[].geometry_geojson`는 지도에서 포함 필지를 별도 색상으로 강조하기 위한 도형 데이터다.
 - `summary.total_floor_area_sqm / summary.total_site_area_sqm` 기준으로 평균 용적률을 계산한다.
-- `summary.undersized_parcel_ratio`는 기본적으로 `150㎡ 미만 필지 비율`이다.
+- `summary.undersized_parcel_ratio`는 기본적으로 `90㎡ 미만 필지 비율`이다.
 
 ### POST `/map/zones`
 설명:

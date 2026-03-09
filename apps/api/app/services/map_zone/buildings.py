@@ -40,9 +40,9 @@ def calculate_zone_building_summary(
             total_site_area_sqm += metrics.site_area_sqm
 
     average_approval_year = round(approval_year_sum / approval_year_count) if approval_year_count else None
-    aged_building_ratio = round((aged_building_count / total_building_count) * 100, 2) if total_building_count else None
+    aged_building_ratio = round((aged_building_count / total_building_count) * 100, 2) if total_building_count else 0.0
     average_floor_area_ratio = (
-        round((total_floor_area_sqm / total_site_area_sqm) * 100, 2) if total_site_area_sqm > 0 and total_floor_area_sqm > 0 else None
+        round((total_floor_area_sqm / total_site_area_sqm) * 100, 2) if total_site_area_sqm > 0 and total_floor_area_sqm > 0 else 0.0
     )
     undersized_parcel_ratio = round((undersized_parcel_count / len(parcels)) * 100, 2) if parcels else None
 
@@ -51,8 +51,8 @@ def calculate_zone_building_summary(
         "aged_building_count": aged_building_count,
         "aged_building_ratio": aged_building_ratio,
         "average_approval_year": average_approval_year,
-        "total_floor_area_sqm": round(total_floor_area_sqm, 2) if total_floor_area_sqm > 0 else None,
-        "total_site_area_sqm": round(total_site_area_sqm, 2) if total_site_area_sqm > 0 else None,
+        "total_floor_area_sqm": round(total_floor_area_sqm, 2) if total_floor_area_sqm > 0 else 0.0,
+        "total_site_area_sqm": round(total_site_area_sqm, 2) if total_site_area_sqm > 0 else round(sum(parcel.area_sqm for parcel in parcels), 2),
         "average_floor_area_ratio": average_floor_area_ratio,
         "undersized_parcel_count": undersized_parcel_count,
         "undersized_parcel_ratio": undersized_parcel_ratio,

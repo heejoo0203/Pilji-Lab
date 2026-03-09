@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import unquote
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -86,7 +87,7 @@ def fetch_building_register_metrics_batch(
 
     errors: list[str] = []
     fetched_rows: list[BuildingRegisterCache] = []
-    max_workers = max(1, min(settings.map_zone_building_workers, len(missing_pnu_list)))
+    max_workers = max(1, min(settings.map_zone_building_workers, len(missing_pnu_list), 4))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {
             executor.submit(
@@ -100,6 +101,18 @@ def fetch_building_register_metrics_batch(
             pnu = future_map[future]
             try:
                 metrics = future.result()
+                metrics_by_pnu[pnu] = metrics
+                if metrics.has_building_register and (metrics.source_pnu is None or metrics.source_pnu == metrics.pnu):
+                    fetched_rows.append(_metrics_to_cache_row(metrics, now=now))
+            except Exception:
+                errors.append(pnu)
+
+    if errors:
+        retry_errors = list(errors)
+        errors = []
+        for pnu in retry_errors:
+            try:
+                metrics = _fetch_building_register_metrics_for_pnu(pnu, parcel_area_by_pnu.get(pnu))
                 metrics_by_pnu[pnu] = metrics
                 if metrics.has_building_register and (metrics.source_pnu is None or metrics.source_pnu == metrics.pnu):
                     fetched_rows.append(_metrics_to_cache_row(metrics, now=now))
@@ -154,7 +167,7 @@ def fetch_building_register_metrics_batch(
 
 
 def _is_building_api_configured() -> bool:
-    value = settings.bld_hub_service_key.strip()
+    value = _normalized_service_key()
     return bool(value and value != "your-building-hub-service-key")
 
 
@@ -315,7 +328,7 @@ def _call_building_hub_json(endpoint: str, params: dict[str, str]) -> dict[str, 
     response = session.get(
         f"{settings.bld_hub_api_base_url.rstrip('/')}/{endpoint.lstrip('/')}",
         params={
-            "serviceKey": settings.bld_hub_service_key,
+            "serviceKey": _normalized_service_key(),
             "_type": "json",
             **params,
         },
@@ -327,6 +340,13 @@ def _call_building_hub_json(endpoint: str, params: dict[str, str]) -> dict[str, 
     if str(header.get("resultCode", "")).strip() not in {"", "00"}:
         raise RuntimeError(str(header.get("resultMsg", "건축물대장 API 오류")).strip() or "건축물대장 API 오류")
     return payload.get("response", {})
+
+
+def _normalized_service_key() -> str:
+    value = settings.bld_hub_service_key.strip()
+    if "%" in value:
+        return unquote(value)
+    return value
 
 
 def _get_building_session() -> requests.Session:

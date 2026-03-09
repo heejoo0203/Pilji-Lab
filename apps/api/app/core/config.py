@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     map_zone_land_metadata_workers: int = Field(default=6, alias="MAP_ZONE_LAND_METADATA_WORKERS")
     map_zone_aged_building_years: int = Field(default=30, alias="MAP_ZONE_AGED_BUILDING_YEARS")
     map_zone_undersized_parcel_threshold_sqm: float = Field(
-        default=150.0,
+        default=90.0,
         alias="MAP_ZONE_UNDERSIZED_PARCEL_THRESHOLD_SQM",
     )
     map_zone_building_cache_ttl_hours: int = Field(default=720, alias="MAP_ZONE_BUILDING_CACHE_TTL_HOURS")

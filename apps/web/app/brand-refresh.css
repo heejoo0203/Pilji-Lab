@@ -1179,6 +1179,28 @@ body > div[style*="position: fixed"] {
   opacity: 0.5;
 }
 
+.map-zone-table-wrap {
+  overflow-x: auto;
+}
+
+.map-zone-table {
+  min-width: 1380px;
+}
+
+.map-zone-table thead th,
+.map-zone-table tbody td {
+  word-break: keep-all;
+  white-space: nowrap;
+}
+
+.map-zone-table .narrow {
+  min-width: 88px;
+}
+
+.map-zone-table .address-col {
+  min-width: 240px;
+}
+
 .map-inline-action {
   padding: 12px 18px;
 }
