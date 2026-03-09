@@ -989,7 +989,7 @@ function MapPageClient() {
 
                 <div className="map-panel-actions stacked">
                   <button type="button" className="lab-btn lab-btn-primary" onClick={() => void runZoneAnalyze()} disabled={zoneLoading || zonePoints.length < 3}>
-                    {zoneLoading ? "분석 중..." : "구역 분석 실행"}
+                    {zoneLoading ? "분석 중..." : "구역 분석"}
                   </button>
                   <button type="button" className="lab-btn lab-btn-secondary" onClick={undoZonePoint} disabled={zonePoints.length === 0 || zoneLoading}>
                     되돌리기
@@ -1015,7 +1015,7 @@ function MapPageClient() {
                   )}
                 </div>
 
-                <div className="map-panel-actions">
+                <div className="map-panel-actions map-zone-action-row">
                   {!zoneResult?.summary.is_saved ? (
                     <button type="button" className="lab-btn lab-btn-secondary" onClick={() => void runZoneSave()} disabled={!zoneResult || zoneSaveLoading}>
                       {zoneSaveLoading ? "저장 중..." : "구역 저장"}

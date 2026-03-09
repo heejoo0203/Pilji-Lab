@@ -1520,7 +1520,7 @@ body::before {
 }
 
 .brand-mark-svg {
-  filter: none;
+  filter: drop-shadow(0 10px 14px rgba(18, 59, 102, 0.08));
 }
 
 .brand-wordmark-md {
@@ -1646,8 +1646,8 @@ body::before {
 }
 
 .lab-hero-copy h1 {
-  font-size: clamp(36px, 5vw, 64px);
-  line-height: 1.02;
+  font-size: clamp(34px, 4.4vw, 56px);
+  line-height: 1.06;
 }
 
 .lab-hero-copy p,
@@ -1667,11 +1667,11 @@ body::before {
   align-items: center;
   gap: 8px;
   width: fit-content;
-  padding: 8px 12px;
+  padding: 7px 10px;
   border-radius: 999px;
   background: rgba(31, 95, 175, 0.08);
   color: var(--lab-primary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1694,7 +1694,8 @@ body::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 18px;
+  padding: 10px 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--lab-primary-strong);
   background: rgba(18, 59, 102, 0.05);
@@ -1741,7 +1742,7 @@ body::before {
 .lab-btn.compact,
 .lab-float-btn,
 .lab-card-link.secondary {
-  padding: 10px 14px;
+  padding: 8px 12px;
 }
 
 .lab-hero-panel {
@@ -1751,7 +1752,7 @@ body::before {
 
 .lab-hero-panel-card,
 .lab-mini-card {
-  padding: 18px 20px;
+  padding: 16px 18px;
 }
 
 .lab-hero-panel-title,
@@ -1771,7 +1772,7 @@ body::before {
   display: block;
   margin-top: 8px;
   color: var(--lab-primary-strong);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.35;
   letter-spacing: -0.03em;
 }
@@ -1798,7 +1799,7 @@ body::before {
 }
 
 .lab-action-card {
-  padding: 20px;
+  padding: 18px;
 }
 
 .lab-card-kicker {
@@ -1824,10 +1825,15 @@ body::before {
 
 .search-page .lab-hero {
   align-items: start;
+  grid-template-columns: minmax(0, 1.15fr) 420px;
+}
+
+.search-page .lab-hero-copy h1 {
+  font-size: clamp(30px, 3.9vw, 50px);
 }
 
 .search-workbench {
-  grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+  grid-template-columns: 420px minmax(0, 1fr);
   align-items: start;
 }
 
@@ -1837,7 +1843,8 @@ body::before {
 }
 
 .search-tab-switch {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding: 6px;
   border-radius: 999px;
@@ -1845,7 +1852,8 @@ body::before {
 }
 
 .lab-toggle {
-  min-width: 112px;
+  min-width: 0;
+  width: 100%;
   background: transparent;
   box-shadow: none;
 }
@@ -1900,8 +1908,8 @@ body::before {
 .search-inline-card {
   margin-top: 16px;
   padding: 16px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   border-radius: 16px;
@@ -2023,7 +2031,7 @@ body::before {
 
 .map-workbench {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: 392px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -2058,6 +2066,64 @@ body::before {
 .map-panel-actions.stacked {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
+}
+
+.map-panel-actions.stacked .lab-btn,
+.map-zone-action-row .lab-btn {
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.map-mode-switch {
+  width: 100%;
+}
+
+.map-zone-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: center;
+}
+
+.map-zone-action-row .map-save-state {
+  width: 100%;
+  justify-content: center;
+}
+
+.mypage-page {
+  display: grid;
+  gap: 20px;
+}
+
+.mypage-hero-shell {
+  align-items: start;
+}
+
+.mypage-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mypage-card-pro {
+  display: grid;
+  gap: 14px;
+}
+
+.lab-section-head.compact {
+  margin-bottom: 4px;
+}
+
+.lab-section-head.compact h2 {
+  font-size: 26px;
+}
+
+.mypage-card-pro .field-label {
+  gap: 6px;
+}
+
+.mypage-card-pro .auth-input {
+  min-height: 52px;
 }
 
 .map-stage-column {
@@ -2209,7 +2275,8 @@ body::before {
   .search-report-grid,
   .lab-action-grid,
   .lab-decision-grid,
-  .map-workbench {
+  .map-workbench,
+  .mypage-layout {
     grid-template-columns: 1fr;
   }
 
@@ -2219,6 +2286,10 @@ body::before {
 
   .map-panel-actions.stacked {
     grid-template-columns: 1fr;
+  }
+
+  .map-zone-action-row {
+    grid-template-columns: 1fr 1fr 1fr;
   }
 }
 
@@ -2250,6 +2321,16 @@ body::before {
   .lab-hero-panel-grid,
   .search-skeleton-grid {
     grid-template-columns: 1fr;
+  }
+
+  .search-inline-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .search-inline-label,
+  .search-inline-sep {
+    min-width: 0;
   }
 
   .map-frame {

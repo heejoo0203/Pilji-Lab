@@ -64,18 +64,30 @@ export default function MyPage() {
 
   if (!isLoggedIn) {
     return (
-      <div className="mypage-shell">
-        <section className="mypage-hero hero-grid">
-          <div>
-            <span className="eyebrow">Account Center</span>
-            <h1 className="hero-title">계정, 보안, 약관 동의 내역을 한 곳에서 관리합니다.</h1>
-            <p className="hero-copy">필지랩 마이페이지는 회원 정보 수정부터 앱 다운로드, 계정 삭제까지 운영형 서비스 기준으로 구성돼 있습니다.</p>
+      <div className="lab-page mypage-page">
+        <section className="lab-hero mypage-hero-shell">
+          <div className="lab-hero-copy">
+            <span className="lab-eyebrow">My PiljiLab</span>
+            <h1>계정과 서비스 설정을 한 화면에서 관리합니다.</h1>
+            <p>회원 정보, 보안, 약관 동의 내역, 앱 다운로드와 계정 삭제를 마이페이지에서 정리했습니다.</p>
+          </div>
+          <div className="lab-hero-panel-grid">
+            <article className="lab-mini-card">
+              <span>프로필</span>
+              <strong>이름 · 연락처 · 이미지 수정</strong>
+            </article>
+            <article className="lab-mini-card">
+              <span>보안</span>
+              <strong>비밀번호 변경 · 탈퇴 확인</strong>
+            </article>
           </div>
         </section>
-        <section className="panel">
-          <h2>마이페이지는 로그인 후 사용할 수 있습니다.</h2>
-          <p className="hint">로그인 후 계정 설정, 비밀번호 변경, 서비스 약관 확인, 앱 다운로드를 이용할 수 있습니다.</p>
-          <button className="btn-primary" onClick={() => openAuth("login")}>
+        <section className="lab-surface">
+          <div className="lab-section-head">
+            <h2>마이페이지는 로그인 후 사용할 수 있습니다.</h2>
+            <p>로그인 후 계정 설정, 약관 확인, 앱 다운로드 기능을 이용할 수 있습니다.</p>
+          </div>
+          <button className="lab-btn lab-btn-primary" onClick={() => openAuth("login")}>
             로그인하고 마이페이지 열기
           </button>
         </section>
@@ -84,37 +96,40 @@ export default function MyPage() {
   }
 
   return (
-    <div className="mypage-shell">
-      <section className="mypage-hero hero-grid">
-        <div>
-          <span className="eyebrow">Account Center</span>
-          <h1 className="hero-title">필지랩 계정과 서비스 설정을 한 화면에서 다룹니다.</h1>
-          <p className="hero-copy">프로필, 비밀번호, 약관 동의 내역, 모바일 앱 배포본, 회원 탈퇴까지 계정 운영 흐름을 정리했습니다.</p>
+    <div className="lab-page mypage-page">
+      <section className="lab-hero mypage-hero-shell">
+        <div className="lab-hero-copy">
+          <span className="lab-eyebrow">My PiljiLab</span>
+          <h1>계정과 서비스 설정을 한 화면에서 다룹니다.</h1>
+          <p>프로필 수정, 보안 관리, 약관 확인, 앱 다운로드, 계정 삭제를 운영형 서비스 흐름에 맞춰 정리했습니다.</p>
           {mergedMessage ? <p className="hint">{mergedMessage}</p> : null}
         </div>
-        <div className="hero-stat-grid">
-          <div className="hero-stat-card">
-            <div className="hero-stat-label">이름</div>
-            <div className="hero-stat-value small">{user?.full_name || "-"}</div>
-          </div>
-          <div className="hero-stat-card">
-            <div className="hero-stat-label">이메일</div>
-            <div className="hero-stat-value small">{user?.email || "-"}</div>
-          </div>
-          <div className="hero-stat-card">
-            <div className="hero-stat-label">연락처</div>
-            <div className="hero-stat-value small">{user?.phone_number || "-"}</div>
-          </div>
-          <div className="hero-stat-card">
-            <div className="hero-stat-label">역할</div>
-            <div className="hero-stat-value small">{user?.role || "user"}</div>
-          </div>
+        <div className="lab-hero-panel-grid">
+          <article className="lab-mini-card">
+            <span>이름</span>
+            <strong>{user?.full_name || "-"}</strong>
+          </article>
+          <article className="lab-mini-card">
+            <span>이메일</span>
+            <strong>{user?.email || "-"}</strong>
+          </article>
+          <article className="lab-mini-card">
+            <span>연락처</span>
+            <strong>{user?.phone_number || "-"}</strong>
+          </article>
+          <article className="lab-mini-card">
+            <span>권한</span>
+            <strong>{user?.role || "user"}</strong>
+          </article>
         </div>
       </section>
 
-      <section className="panel mypage-grid">
-        <article className="mypage-card">
-          <h3>회원 정보 수정</h3>
+      <section className="mypage-layout">
+        <article className="lab-surface mypage-card-pro">
+          <div className="lab-section-head compact">
+            <h2>회원 정보 수정</h2>
+            <p>이름, 연락처, 프로필 이미지를 최신 상태로 유지합니다.</p>
+          </div>
           <label className="field-label" htmlFor="mypage-name">
             이름
           </label>
@@ -150,7 +165,7 @@ export default function MyPage() {
 
           <button
             type="button"
-            className="btn-primary"
+            className="lab-btn lab-btn-primary"
             disabled={authLoading}
             onClick={async () => {
               setLocalMessage("");
@@ -162,8 +177,11 @@ export default function MyPage() {
           </button>
         </article>
 
-        <article className="mypage-card">
-          <h3>비밀번호 변경</h3>
+        <article className="lab-surface mypage-card-pro">
+          <div className="lab-section-head compact">
+            <h2>비밀번호 변경</h2>
+            <p>기존 비밀번호 확인 후 새 비밀번호로 교체합니다.</p>
+          </div>
           <label className="field-label" htmlFor="mypage-current-password">
             기존 비밀번호
           </label>
@@ -202,7 +220,7 @@ export default function MyPage() {
 
           <button
             type="button"
-            className="btn-primary"
+            className="lab-btn lab-btn-primary"
             disabled={authLoading}
             onClick={async () => {
               setLocalMessage("");
@@ -220,8 +238,11 @@ export default function MyPage() {
           </button>
         </article>
 
-        <article className="mypage-card">
-          <h3>서비스 약관</h3>
+        <article className="lab-surface mypage-card-pro">
+          <div className="lab-section-head compact">
+            <h2>서비스 약관</h2>
+            <p>회원가입 시 동의한 약관 버전과 전문을 다시 확인할 수 있습니다.</p>
+          </div>
           {termsLoading ? <p className="hint">약관을 불러오는 중입니다...</p> : null}
           {!termsLoading && terms ? (
             <>
@@ -236,27 +257,22 @@ export default function MyPage() {
           {!termsLoading && !terms ? <p className="hint">약관 정보를 불러오지 못했습니다.</p> : null}
         </article>
 
-        <article className="mypage-card">
-          <h3>앱 다운로드</h3>
-          <p className="hint">
-            안드로이드 기기에서 필지랩 앱을 설치해 모바일 환경에서 바로 사용할 수 있습니다.
-          </p>
-          <a
-            className="btn-primary full"
-            href="/downloads/autoLV-android-release-v2.1.2.apk"
-            download
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+        <article className="lab-surface mypage-card-pro">
+          <div className="lab-section-head compact">
+            <h2>앱 다운로드</h2>
+            <p>안드로이드 기기에서 필지랩 앱을 설치해 모바일 환경에서 바로 사용할 수 있습니다.</p>
+          </div>
+          <a className="lab-btn lab-btn-primary full" href="/downloads/autoLV-android-release-v2.1.2.apk" download target="_blank" rel="noopener noreferrer">
             필지랩 안드로이드 APK 다운로드
           </a>
         </article>
 
-        <article className="mypage-card danger-zone">
-          <h3>회원 탈퇴</h3>
+        <article className="lab-surface mypage-card-pro danger-zone">
+          <div className="lab-section-head compact">
+            <h2>회원 탈퇴</h2>
+            <p>확인 문구를 정확히 입력해야 탈퇴할 수 있습니다.</p>
+          </div>
           <p className="danger-guide">
-            아래 문구를 정확히 입력해야 탈퇴할 수 있습니다.
-            <br />
             <strong>{expectedWithdrawalText}</strong>
           </p>
           <input
@@ -267,7 +283,7 @@ export default function MyPage() {
           />
           <button
             type="button"
-            className="btn-primary danger-fill"
+            className="lab-btn lab-btn-danger full"
             disabled={authLoading}
             onClick={async () => {
               setLocalMessage("");

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useAuth } from "@/app/components/auth-provider";
@@ -53,6 +53,7 @@ export default function SearchPage() {
 function SearchPageClient() {
   const { user, openAuth } = useAuth();
   const params = useSearchParams();
+  const formRef = useRef<HTMLElement | null>(null);
 
   const [ldMap, setLdMap] = useState<LdMap>({});
   const [searchTab, setSearchTab] = useState<SearchTab>("지번");
@@ -76,7 +77,7 @@ function SearchPageClient() {
   const [searching, setSearching] = useState(false);
   const [showNoResult, setShowNoResult] = useState(false);
 
-  const [message, setMessage] = useState("주소를 선택한 뒤 검색 버튼을 눌러주세요.");
+  const [message, setMessage] = useState("빠른 시작 예시를 선택하거나 주소를 입력해 바로 조회해 보세요.");
   const [rows, setRows] = useState<LandResultRow[]>([]);
 
   const isLoggedIn = Boolean(user);
@@ -254,7 +255,9 @@ function SearchPageClient() {
     setRoadName(example.roadName ?? "");
     setBuildingMainNo(example.buildingMainNo ?? "");
     setBuildingSubNo(example.buildingSubNo ?? "");
-    setMessage(`${example.label} 예시를 불러왔습니다. 내용을 확인하고 바로 조회할 수 있습니다.`);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setMessage(`${example.label} 예시를 불러왔습니다. 바로 조회합니다.`);
+    void runQuickExample(example);
   };
 
   const runSearch = async () => {
@@ -270,34 +273,37 @@ function SearchPageClient() {
     try {
       const body = searchTab === "지번" ? buildJibunPayload() : buildRoadPayload();
       if (!body) return;
-
-      const res = await landFetch("/api/v1/land/single", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const payload = (await safeJson(res)) as LandLookupApiResponse | { detail?: unknown };
-      if (!res.ok) throw new Error(extractError(payload, "개별공시지가 조회에 실패했습니다."));
-
-      const okPayload = payload as LandLookupApiResponse;
-      const nextRows = okPayload.rows ?? [];
-      setRows(nextRows);
-      setShowNoResult(nextRows.length === 0);
-      const summary = okPayload.address_summary || createSummaryFallback(searchTab);
-      setMessage(`검색 완료: ${summary} (총 ${nextRows.length}건)`);
-
-      if (isLoggedIn) {
-        void createSearchHistoryLog({
-          search_type: okPayload.search_type,
-          pnu: okPayload.pnu,
-          address_summary: summary,
-          rows: nextRows,
-        }).catch(() => {
-          // 조회 자체는 성공했으므로 저장 실패는 흐름을 막지 않는다.
-        });
-      }
+      await executeLookup(body, createSummaryFallback(searchTab));
     } catch (error) {
       const text = error instanceof Error ? error.message : "조회 중 오류가 발생했습니다.";
+      setRows([]);
+      setShowNoResult(false);
+      setMessage(text);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const runQuickExample = async (example: QuickExample) => {
+    setSearching(true);
+    setShowNoResult(false);
+    try {
+      const payload =
+        example.tab === "지번"
+          ? buildQuickJibunPayload(example)
+          : {
+              search_type: "road" as const,
+              sido: example.sido,
+              sigungu: example.sigungu,
+              road_name: example.roadName ?? "",
+              building_main_no: example.buildingMainNo ?? "",
+              building_sub_no: example.buildingSubNo ?? "",
+            };
+
+      if (!payload) return;
+      await executeLookup(payload, createQuickSummary(example));
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "예시 조회 중 오류가 발생했습니다.";
       setRows([]);
       setShowNoResult(false);
       setMessage(text);
@@ -340,6 +346,34 @@ function SearchPageClient() {
     };
   };
 
+  const executeLookup = async (body: Record<string, unknown>, fallbackSummary: string) => {
+    const res = await landFetch("/api/v1/land/single", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = (await safeJson(res)) as LandLookupApiResponse | { detail?: unknown };
+    if (!res.ok) throw new Error(extractError(payload, "개별공시지가 조회에 실패했습니다."));
+
+    const okPayload = payload as LandLookupApiResponse;
+    const nextRows = okPayload.rows ?? [];
+    setRows(nextRows);
+    setShowNoResult(nextRows.length === 0);
+    const summary = okPayload.address_summary || fallbackSummary;
+    setMessage(`검색 완료: ${summary} (총 ${nextRows.length}건)`);
+
+    if (isLoggedIn) {
+      void createSearchHistoryLog({
+        search_type: okPayload.search_type,
+        pnu: okPayload.pnu,
+        address_summary: summary,
+        rows: nextRows,
+      }).catch(() => {
+        // 조회 자체는 성공했으므로 저장 실패는 흐름을 막지 않는다.
+      });
+    }
+  };
+
   const createSummaryFallback = (type: SearchTab) => {
     if (type === "지번") {
       const jibun = `${sanType === "산" ? "산 " : ""}${mainNo}${subNo ? `-${subNo}` : ""}`;
@@ -349,15 +383,40 @@ function SearchPageClient() {
     return `${sido} ${sigungu} ${roadAddress}`;
   };
 
+  const buildQuickJibunPayload = (example: QuickExample) => {
+    const selectedDong = example.dong ?? "";
+    const ldCode = ldMap[example.sido]?.[example.sigungu]?.[selectedDong];
+    if (!ldCode) {
+      setMessage(`${example.label} 예시에 필요한 법정동 코드를 아직 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.`);
+      return null;
+    }
+    return {
+      search_type: "jibun" as const,
+      ld_code: ldCode,
+      san_type: example.sanType ?? "일반",
+      main_no: example.mainNo ?? "",
+      sub_no: example.subNo ?? "",
+    };
+  };
+
+  const createQuickSummary = (example: QuickExample) => {
+    if (example.tab === "지번") {
+      const jibun = `${example.sanType === "산" ? "산 " : ""}${example.mainNo ?? ""}${example.subNo ? `-${example.subNo}` : ""}`;
+      return `${example.sido} ${example.sigungu} ${example.dong ?? ""} ${jibun}`.trim();
+    }
+    const roadAddress = `${example.roadName ?? ""} ${example.buildingMainNo ?? ""}${example.buildingSubNo ? `-${example.buildingSubNo}` : ""}`;
+    return `${example.sido} ${example.sigungu} ${roadAddress}`.trim();
+  };
+
   return (
     <div className="lab-page search-page">
       <section className="lab-hero search-hero">
         <div className="lab-hero-copy">
           <span className="lab-eyebrow">Single Parcel Lookup</span>
-          <h1>주소를 입력하면, 필지 단위 결과를 바로 리포트처럼 보여줍니다.</h1>
+          <h1>주소를 입력하면 필요한 필지 결과를 한눈에 정리해 드립니다.</h1>
           <p>
-            입력창보다 결과가 먼저 보이도록 설계했습니다. 개별공시지가, 전년 대비, 연도별 이력까지 한 화면에서 읽을 수
-            있습니다.
+            복잡한 입력보다 확인할 결과를 먼저 보이게 구성했습니다. 최신 공시지가와 전년 대비, 연도별 이력을 차분하게
+            확인해 보세요.
           </p>
           <div className="lab-hero-actions">
             <Link href="/map" className="lab-btn lab-btn-primary" onClick={(event) => !isLoggedIn && (event.preventDefault(), openAuth("login"))}>
@@ -418,11 +477,11 @@ function SearchPageClient() {
       </section>
 
       <div className="search-workbench">
-        <section id="search-form" className="lab-surface search-form-card">
+        <section id="search-form" ref={formRef} className="lab-surface search-form-card">
           <div className="lab-section-head">
             <span className="lab-eyebrow">Lookup Form</span>
             <h2>주소 입력</h2>
-            <p>먼저 조회 방식을 선택하고, 행정구역과 주소 요소를 입력해 주세요.</p>
+            <p>조회 방식만 고른 뒤 행정구역과 주소 요소를 순서대로 채워주시면 됩니다.</p>
           </div>
 
           <div className="search-tab-switch">

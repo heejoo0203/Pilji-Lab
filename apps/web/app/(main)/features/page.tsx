@@ -26,10 +26,9 @@ const quickActions = [
 ] as const;
 
 const highlights = [
-  { label: "핵심 데이터", value: "공시지가 · 노후도 · 용적률" },
-  { label: "주요 작업", value: "필지조회 · 지도분석 · 구역 집계" },
-  { label: "활용 장면", value: "재개발 검토 · 물건 스크리닝" },
-  { label: "출력 형태", value: "리포트형 결과 카드 · CSV" },
+  { label: "개별 조회", value: "지번 · 도로명 기준 단건 분석" },
+  { label: "지도 분석", value: "필지 선택 · 지적도 · 구역 집계" },
+  { label: "파일 분석", value: "CSV/XLSX 일괄 처리 · 결과 다운로드" },
 ] as const;
 
 export default function FeaturesPage() {
@@ -40,11 +39,11 @@ export default function FeaturesPage() {
     <div className="lab-page">
       <section className="lab-hero">
         <div className="lab-hero-copy">
-          <span className="lab-eyebrow">Land Intelligence Workspace</span>
+          <span className="lab-eyebrow">Land Intelligence</span>
           <h1>필지와 구역을 데이터로 분석하세요</h1>
           <p>
-            필지Lab은 개별공시지가 조회를 넘어, 지도 기반 필지 선택과 구역 집계까지 연결하는 토지 분석 도구입니다.
-            공시지가, 노후도, 용적률, 과소필지 비율을 한 흐름으로 확인할 수 있습니다.
+            필지Lab은 단순 조회 화면이 아니라, 필지와 구역을 빠르게 읽고 판단하는 토지 분석 도구입니다. 개별조회,
+            지도 분석, 파일 분석을 한 흐름으로 연결했습니다.
           </p>
           <div className="lab-hero-actions">
             {isLoggedIn ? (
@@ -72,10 +71,6 @@ export default function FeaturesPage() {
         </div>
 
         <div className="lab-hero-panel">
-          <div className="lab-hero-panel-card">
-            <div className="lab-hero-panel-title">핵심 워크플로우</div>
-            <div className="lab-hero-panel-value">개별조회 → 지도조회 → 구역 분석 → 파일 분석</div>
-          </div>
           <div className="lab-hero-panel-grid">
             {highlights.map((item) => (
               <article key={item.label} className="lab-mini-card">
