@@ -20,7 +20,7 @@ def upgrade() -> None:
         "building_register_caches",
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("pnu", sa.String(length=19), nullable=False),
-        sa.Column("has_building_register", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("has_building_register", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("building_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("aged_building_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("residential_building_count", sa.Integer(), nullable=False, server_default=sa.text("0")),

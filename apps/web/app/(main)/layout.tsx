@@ -75,7 +75,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="app-shell">
       <header className="top-nav">
-        <BrandLogo href="/features" priority withTagline size="md" />
+        <BrandLogo href="/features" size="md" />
 
         <nav className={`center-nav ${isLoggedIn ? "auth-nav" : "guest-nav"}`}>
           <div
