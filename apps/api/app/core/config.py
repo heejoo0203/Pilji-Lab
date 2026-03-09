@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     vworld_referer: str = Field(default="https://auto-lv.vercel.app", alias="VWORLD_REFERER")
     vworld_proxy_url: str = Field(default="", alias="VWORLD_PROXY_URL")
     vworld_proxy_token: str = Field(default="", alias="VWORLD_PROXY_TOKEN")
+    bld_hub_api_base_url: str = Field(
+        default="https://apis.data.go.kr/1613000/BldRgstHubService",
+        alias="BLD_HUB_API_BASE_URL",
+    )
+    bld_hub_service_key: str = Field(default="", alias="BLD_HUB_SERVICE_KEY")
+    bld_hub_timeout_seconds: int = Field(default=20, alias="BLD_HUB_TIMEOUT_SECONDS")
+    bld_hub_retry_count: int = Field(default=2, alias="BLD_HUB_RETRY_COUNT")
+    bld_hub_retry_backoff_seconds: float = Field(default=0.3, alias="BLD_HUB_RETRY_BACKOFF_SECONDS")
     road_name_file_path: str = Field(default="", alias="ROAD_NAME_FILE_PATH")
     ld_code_file_path: str = Field(default="", alias="LD_CODE_FILE_PATH")
 
@@ -61,6 +69,13 @@ class Settings(BaseSettings):
     map_zone_bbox_split_max_depth: int = Field(default=4, alias="MAP_ZONE_BBOX_SPLIT_MAX_DEPTH")
     map_zone_land_metadata_sync_limit: int = Field(default=80, alias="MAP_ZONE_LAND_METADATA_SYNC_LIMIT")
     map_zone_land_metadata_workers: int = Field(default=6, alias="MAP_ZONE_LAND_METADATA_WORKERS")
+    map_zone_aged_building_years: int = Field(default=30, alias="MAP_ZONE_AGED_BUILDING_YEARS")
+    map_zone_undersized_parcel_threshold_sqm: float = Field(
+        default=150.0,
+        alias="MAP_ZONE_UNDERSIZED_PARCEL_THRESHOLD_SQM",
+    )
+    map_zone_building_cache_ttl_hours: int = Field(default=720, alias="MAP_ZONE_BUILDING_CACHE_TTL_HOURS")
+    map_zone_building_workers: int = Field(default=10, alias="MAP_ZONE_BUILDING_WORKERS")
 
     email_verification_exp_minutes: int = Field(default=10, alias="EMAIL_VERIFICATION_EXP_MINUTES")
     email_verification_max_attempts: int = Field(default=5, alias="EMAIL_VERIFICATION_MAX_ATTEMPTS")

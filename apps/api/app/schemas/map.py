@@ -84,6 +84,13 @@ class MapZoneParcelItem(BaseModel):
     counted_in_summary: bool
     lat: float | None
     lng: float | None
+    building_count: int = 0
+    aged_building_count: int = 0
+    average_approval_year: int | None = None
+    site_area_sqm: float | None = None
+    total_floor_area_sqm: float | None = None
+    floor_area_ratio: float | None = None
+    primary_purpose_name: str | None = None
 
 
 class MapZoneSummary(BaseModel):
@@ -98,6 +105,17 @@ class MapZoneSummary(BaseModel):
     excluded_parcel_count: int
     average_unit_price: int | None
     assessed_total_price: int
+    building_data_ready: bool = True
+    building_data_message: str | None = None
+    total_building_count: int = 0
+    aged_building_count: int = 0
+    aged_building_ratio: float | None = None
+    average_approval_year: int | None = None
+    total_floor_area_sqm: float | None = None
+    total_site_area_sqm: float | None = None
+    average_floor_area_ratio: float | None = None
+    undersized_parcel_count: int = 0
+    undersized_parcel_ratio: float | None = None
     created_at: str
     updated_at: str
 

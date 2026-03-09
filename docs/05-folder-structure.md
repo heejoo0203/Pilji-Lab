@@ -16,6 +16,8 @@ autoLV/
           20260305_0005_add_phone_number_to_users.py
           20260306_0006_add_zone_analysis_tables.py
           20260306_0007_alter_parcels_geom_to_multipolygon.py
+          20260307_0008_add_land_metadata_to_zone_parcels.py
+          20260309_0009_add_building_register_cache.py
       app/
         api/
           auth.py
@@ -38,6 +40,7 @@ autoLV/
           parcel.py
           zone_analysis.py
           zone_analysis_parcel.py
+          building_register_cache.py
         repositories/
           user_repository.py
           bulk_job_repository.py
@@ -57,7 +60,14 @@ autoLV/
           terms_service.py
           vworld_service.py
           map_service.py
+          building_register_service.py
           map_zone_service.py
+          map_zone/
+            buildings.py
+            domain.py
+            geometry.py
+            parcels.py
+            summary.py
           bulk/
             constants.py
             column_mapper.py
@@ -85,14 +95,21 @@ autoLV/
           auth-modal.tsx
           auth-provider.tsx
           profile-action-modal.tsx
+          map/
+            map-rows-table.tsx
+            metric-card.tsx
+            zone-library-panel.tsx
+            zone-result-table.tsx
           files/
             bulk-upload-panel.tsx
             bulk-job-table.tsx
         lib/
           address.ts
+          api-client.ts
           bulk-api.ts
           history-api.ts
           map-api.ts
+          map-view-utils.ts
           types.ts
         (main)/
           layout.tsx
@@ -131,6 +148,7 @@ autoLV/
     08-portfolio-enhancement.md
     09-release-notes-v2.2.0.md
     10-release-notes-v2.2.1.md
+    11-ai-zone-accuracy-plan.md
     feature-spec.md
     architecture.svg
     TN_SPRD_RDNM.txt
@@ -173,14 +191,24 @@ autoLV/
 - Web은 페이지/컴포넌트/API 클라이언트(`lib/*`)를 분리
 - 지도조회/조회기록은 페이지 단의 UI와 API 호출 모듈을 분리
 - 저장 구역/조회기록 삭제처럼 목록성 기능은 페이지 UI와 API 클라이언트 분리 원칙 유지
+- 구역 사업성 분석은 `map_zone/*`와 `building_register_service.py`로 분리해 공간 계산과 건축물대장 연동 책임을 분리
+- 건축물대장 원본 응답은 `building_register_caches`에 캐시하고, 구역 응답은 실시간 집계만 수행
 
 ## 5. 향후 확장 권장
-- 지도 폴리곤 분석 고도화 시 모듈 분리 권장:
-  - `app/services/map_zone_service.py` 내 계산/집계/내보내기 하위 모듈화
+- 지도 폴리곤 분석 고도화 시 AI/보정 계층 추가 권장:
+  - `app/services/map_zone_ai_service.py`
+  - `app/services/map_zone_snap_service.py`
+  - `app/services/map_zone_feedback_service.py`
 - 운영 지표 도입 시 모듈 추가 권장:
   - `app/services/metrics_service.py`
   - `app/api/metrics.py`
-- 건축물대장 분석 확장 시 모듈 추가 권장:
-  - `app/services/building_register_service.py`
-  - `app/services/zone_building_service.py`
-  - `app/models/building_register_cache.py`
+- 건축물대장 분석 확장 시 추가 권장:
+  - `app/services/building_register_frontage_service.py`
+  - `app/services/building_register_illegal_service.py`
+  - `app/models/building_frontage_cache.py`
+  - `app/models/illegal_building_registry.py`
+- AI 추천/설명 계층 확장 시 모듈 추가 권장:
+  - `app/services/llm_report_service.py`
+  - `app/models/zone_ai_suggestion.py`
+  - `app/models/zone_ai_feedback.py`
+  - `app/models/zone_ai_model_registry.py`

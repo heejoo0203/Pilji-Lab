@@ -24,6 +24,8 @@ from app.schemas.map import (
     MapZoneSummary,
     MapZoneUpdateRequest,
 )
+from app.services.building_register_service import fetch_building_register_metrics_batch
+from app.services.map_zone.buildings import calculate_zone_building_summary
 from app.services.map_zone.domain import PreparedZonePreview
 from app.services.map_zone.geometry import (
     calculate_bbox,
@@ -135,6 +137,10 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
     parcel_metadata_map = fetch_saved_zone_parcel_metadata(db, [row.pnu for row in rows])
     missing_land_metadata_pnu = [row.pnu for row in rows if not row.land_category_name and not row.purpose_area_name]
     live_land_metadata_map = fetch_zone_land_metadata(missing_land_metadata_pnu) if missing_land_metadata_pnu else {}
+    building_batch = fetch_building_register_metrics_batch(
+        db,
+        parcel_area_by_pnu={row.pnu: float(row.area_sqm or 0.0) for row in rows},
+    )
     parcels = [
         MapZoneParcelItem(
             pnu=row.pnu,
@@ -154,9 +160,40 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
             ),
             lat=row.lat,
             lng=row.lng,
+            building_count=building_batch.metrics_by_pnu.get(row.pnu, {}).building_count if row.pnu in building_batch.metrics_by_pnu else 0,
+            aged_building_count=building_batch.metrics_by_pnu.get(row.pnu, {}).aged_building_count if row.pnu in building_batch.metrics_by_pnu else 0,
+            average_approval_year=(
+                building_batch.metrics_by_pnu.get(row.pnu, {}).average_approval_year
+                if row.pnu in building_batch.metrics_by_pnu
+                else None
+            ),
+            site_area_sqm=(
+                building_batch.metrics_by_pnu.get(row.pnu, {}).site_area_sqm
+                if row.pnu in building_batch.metrics_by_pnu
+                else None
+            ),
+            total_floor_area_sqm=(
+                building_batch.metrics_by_pnu.get(row.pnu, {}).total_floor_area_sqm
+                if row.pnu in building_batch.metrics_by_pnu
+                else None
+            ),
+            floor_area_ratio=(
+                building_batch.metrics_by_pnu.get(row.pnu, {}).floor_area_ratio
+                if row.pnu in building_batch.metrics_by_pnu
+                else None
+            ),
+            primary_purpose_name=(
+                building_batch.metrics_by_pnu.get(row.pnu, {}).primary_purpose_name
+                if row.pnu in building_batch.metrics_by_pnu
+                else None
+            ),
         )
         for row in rows
     ]
+    building_summary = calculate_zone_building_summary(
+        [item for item in parcels if item.included],
+        metrics_by_pnu=building_batch.metrics_by_pnu,
+    )
     summary = MapZoneSummary(
         zone_id=analysis.id,
         zone_name=analysis.zone_name,
@@ -172,6 +209,17 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
             zone_area_sqm=response_zone_area_sqm,
         ),
         assessed_total_price=int(analysis.assessed_total_price),
+        building_data_ready=building_batch.ready,
+        building_data_message=building_batch.message,
+        total_building_count=int(building_summary["total_building_count"]),
+        aged_building_count=int(building_summary["aged_building_count"]),
+        aged_building_ratio=building_summary["aged_building_ratio"],
+        average_approval_year=building_summary["average_approval_year"],
+        total_floor_area_sqm=building_summary["total_floor_area_sqm"],
+        total_site_area_sqm=building_summary["total_site_area_sqm"],
+        average_floor_area_ratio=building_summary["average_floor_area_ratio"],
+        undersized_parcel_count=int(building_summary["undersized_parcel_count"]),
+        undersized_parcel_ratio=building_summary["undersized_parcel_ratio"],
         created_at=to_iso(analysis.created_at),
         updated_at=to_iso(analysis.updated_at),
     )
@@ -299,6 +347,12 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
             "price_current",
             "estimated_total_price",
             "price_year",
+            "building_count",
+            "aged_building_count",
+            "average_approval_year",
+            "total_floor_area_sqm",
+            "floor_area_ratio",
+            "primary_purpose_name",
             "overlap_ratio",
             "included",
             "counted_in_summary",
@@ -318,6 +372,12 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
                 row.price_current or "",
                 row.estimated_total_price or "",
                 row.price_year or "",
+                row.building_count,
+                row.aged_building_count,
+                row.average_approval_year or "",
+                f"{row.total_floor_area_sqm:.2f}" if row.total_floor_area_sqm is not None else "",
+                f"{row.floor_area_ratio:.2f}" if row.floor_area_ratio is not None else "",
+                row.primary_purpose_name or "",
                 f"{row.overlap_ratio:.4f}",
                 "Y" if row.included else "N",
                 "Y" if row.counted_in_summary else "N",
@@ -369,6 +429,20 @@ def _prepare_zone_preview(db: Session, *, payload: MapZoneAnalyzeRequest) -> Pre
         )
     land_metadata_map = fetch_zone_land_metadata([row["pnu"] for row in overlapped])
     parcels = compose_zone_parcels(overlapped, feature_map, land_metadata_map)
+    building_batch = fetch_building_register_metrics_batch(
+        db,
+        parcel_area_by_pnu={item.pnu: item.area_sqm for item in parcels},
+    )
+    for item in parcels:
+        metrics = building_batch.metrics_by_pnu.get(item.pnu)
+        if metrics is None:
+            continue
+        item.building_count = metrics.building_count
+        item.aged_building_count = metrics.aged_building_count
+        item.average_approval_year = metrics.average_approval_year
+        item.total_floor_area_sqm = metrics.total_floor_area_sqm
+        item.floor_area_ratio = metrics.floor_area_ratio
+        item.primary_purpose_name = metrics.primary_purpose_name
     summary = calculate_summary(parcels)
     return PreparedZonePreview(
         zone_name=zone_name,
@@ -378,6 +452,9 @@ def _prepare_zone_preview(db: Session, *, payload: MapZoneAnalyzeRequest) -> Pre
         zone_area_sqm=summary["zone_area_sqm"],
         parcels=parcels,
         summary=summary,
+        building_metrics_by_pnu=building_batch.metrics_by_pnu,
+        building_data_ready=building_batch.ready,
+        building_data_message=building_batch.message,
         generated_at=datetime.now(timezone.utc),
     )
 
@@ -390,7 +467,12 @@ def _build_zone_response(
     included_pnu_set: set[str] | None = None,
 ) -> MapZoneResponse:
     included_set = included_pnu_set or {item.pnu for item in preview.parcels}
-    summary_values = calculate_summary([item for item in preview.parcels if item.pnu in included_set])
+    included_parcels = [item for item in preview.parcels if item.pnu in included_set]
+    summary_values = calculate_summary(included_parcels)
+    building_summary = calculate_zone_building_summary(
+        included_parcels,
+        metrics_by_pnu=preview.building_metrics_by_pnu,
+    )
     excluded_count = len(preview.parcels) - len(included_set)
 
     parcels = [
@@ -415,6 +497,13 @@ def _build_zone_response(
             ),
             lat=item.lat,
             lng=item.lng,
+            building_count=item.building_count,
+            aged_building_count=item.aged_building_count,
+            average_approval_year=item.average_approval_year,
+            site_area_sqm=preview.building_metrics_by_pnu.get(item.pnu).site_area_sqm if item.pnu in preview.building_metrics_by_pnu else None,
+            total_floor_area_sqm=item.total_floor_area_sqm,
+            floor_area_ratio=item.floor_area_ratio,
+            primary_purpose_name=item.primary_purpose_name,
         )
         for item in preview.parcels
     ]
@@ -433,6 +522,17 @@ def _build_zone_response(
             zone_area_sqm=float(summary_values["zone_area_sqm"]),
         ),
         assessed_total_price=summary_values["assessed_total_price"],
+        building_data_ready=preview.building_data_ready,
+        building_data_message=preview.building_data_message,
+        total_building_count=int(building_summary["total_building_count"]),
+        aged_building_count=int(building_summary["aged_building_count"]),
+        aged_building_ratio=building_summary["aged_building_ratio"],
+        average_approval_year=building_summary["average_approval_year"],
+        total_floor_area_sqm=building_summary["total_floor_area_sqm"],
+        total_site_area_sqm=building_summary["total_site_area_sqm"],
+        average_floor_area_ratio=building_summary["average_floor_area_ratio"],
+        undersized_parcel_count=int(building_summary["undersized_parcel_count"]),
+        undersized_parcel_ratio=building_summary["undersized_parcel_ratio"],
         created_at=to_iso(preview.generated_at),
         updated_at=to_iso(preview.generated_at),
     )

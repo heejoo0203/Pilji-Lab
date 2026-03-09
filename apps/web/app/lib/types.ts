@@ -170,6 +170,13 @@ export type MapZoneParcelItem = {
   counted_in_summary: boolean;
   lat: number | null;
   lng: number | null;
+  building_count: number;
+  aged_building_count: number;
+  average_approval_year: number | null;
+  site_area_sqm: number | null;
+  total_floor_area_sqm: number | null;
+  floor_area_ratio: number | null;
+  primary_purpose_name: string | null;
 };
 
 export type MapZoneSummary = {
@@ -184,6 +191,17 @@ export type MapZoneSummary = {
   excluded_parcel_count: number;
   average_unit_price: number | null;
   assessed_total_price: number;
+  building_data_ready: boolean;
+  building_data_message: string | null;
+  total_building_count: number;
+  aged_building_count: number;
+  aged_building_ratio: number | null;
+  average_approval_year: number | null;
+  total_floor_area_sqm: number | null;
+  total_site_area_sqm: number | null;
+  average_floor_area_ratio: number | null;
+  undersized_parcel_count: number;
+  undersized_parcel_ratio: number | null;
   created_at: string;
   updated_at: string;
 };

@@ -28,6 +28,12 @@ class ZoneParcelComputed:
     land_category_name: str | None
     purpose_area_name: str | None
     geometry_geojson: str | None
+    building_count: int = 0
+    aged_building_count: int = 0
+    average_approval_year: int | None = None
+    total_floor_area_sqm: float | None = None
+    floor_area_ratio: float | None = None
+    primary_purpose_name: str | None = None
 
 
 @dataclass
@@ -39,4 +45,7 @@ class PreparedZonePreview:
     zone_area_sqm: float
     parcels: list[ZoneParcelComputed]
     summary: dict[str, Any]
+    building_metrics_by_pnu: dict[str, Any]
+    building_data_ready: bool
+    building_data_message: str | None
     generated_at: datetime

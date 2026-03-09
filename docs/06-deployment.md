@@ -64,11 +64,17 @@ VWORLD_PROXY_URL=http://<EC2_ELASTIC_IP>:8080/vworld-proxy
 VWORLD_PROXY_TOKEN=<shared-token>
 ```
 
-향후 v3.x 준비(건축물대장 분석):
+구역 사업성 분석(건축물대장 연동):
 ```env
-BUILDING_LEDGER_API_KEY=<public-data-service-key>
-BUILDING_LEDGER_API_BASE_URL=https://apis.data.go.kr
-BUILDING_LEDGER_TIMEOUT_SECONDS=15
+BLD_HUB_API_BASE_URL=https://apis.data.go.kr/1613000/BldRgstHubService
+BLD_HUB_SERVICE_KEY=<public-data-service-key>
+BLD_HUB_TIMEOUT_SECONDS=20
+BLD_HUB_RETRY_COUNT=2
+BLD_HUB_RETRY_BACKOFF_SECONDS=0.3
+MAP_ZONE_AGED_BUILDING_YEARS=30
+MAP_ZONE_UNDERSIZED_PARCEL_THRESHOLD_SQM=150
+MAP_ZONE_BUILDING_CACHE_TTL_HOURS=720
+MAP_ZONE_BUILDING_WORKERS=10
 ```
 
 ### 3.2 Web (`apps/web`)
@@ -93,7 +99,7 @@ python scripts/run_migrations.py
 
 검증:
 - `alembic_version` 존재
-- `users`, `email_verifications`, `bulk_jobs`, `query_logs`, `parcels` 존재
+- `users`, `email_verifications`, `bulk_jobs`, `query_logs`, `parcels`, `zone_analyses`, `zone_analysis_parcels`, `building_register_caches` 존재
 - Neon에서 `SELECT postgis_version();` 성공
 
 ## 5. Vercel 배포
@@ -119,6 +125,8 @@ Root Directory: `apps/web`
 3. `/api/v1/land/single` 정상
 4. `/api/v1/bulk/guide` 정상
 5. `/api/v1/map/click` 정상
+6. `/api/v1/map/zones/analyze` 정상
+7. 구역조회 응답에 `노후도`, `평균 용적률`, `과소필지 비율` 포함
 
 ## 7. VWorld 우회 프록시(필요 시)
 Railway -> VWorld 직접 호출이 차단/불안정할 때 적용한다.
@@ -153,10 +161,11 @@ Railway -> VWorld 직접 호출이 차단/불안정할 때 적용한다.
 ## 9. 운영 점검 체크리스트
 1. 인증: 회원가입/로그인/로그아웃/아이디찾기/비밀번호재설정
 2. 개별조회: 지번/도로명 조회
-3. 지도조회: 지도 렌더링/클릭/주소검색/CSV/상세조회
+3. 지도조회: 지도 렌더링/클릭/주소검색/CSV/상세조회/구역 분석
 4. 파일조회: 업로드/진행률/다운로드/삭제
 5. 조회기록: 저장/필터/정렬/페이지 이동 복원/선택 삭제
 6. 마이페이지: 이름/연락처/이미지 수정, 약관 확인, 탈퇴
+7. 구역 사업성 분석: 건축물 수/노후도/평균 용적률/과소필지 비율
 
 ## 10. 롤백 전략
 1. Web/API를 이전 커밋 또는 태그로 롤백

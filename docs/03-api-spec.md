@@ -522,6 +522,17 @@
     "excluded_parcel_count": 0,
     "average_unit_price": 50646974,
     "assessed_total_price": 923456700000,
+    "building_data_ready": true,
+    "building_data_message": null,
+    "total_building_count": 94,
+    "aged_building_count": 68,
+    "aged_building_ratio": 72.34,
+    "average_approval_year": 1992,
+    "total_floor_area_sqm": 18342.7,
+    "total_site_area_sqm": 12615.3,
+    "average_floor_area_ratio": 145.41,
+    "undersized_parcel_count": 27,
+    "undersized_parcel_ratio": 21.09,
     "created_at": "2026-03-06T01:23:45+00:00",
     "updated_at": "2026-03-06T01:23:45+00:00"
   },
@@ -547,7 +558,14 @@
       "included": true,
       "counted_in_summary": true,
       "lat": 37.58,
-      "lng": 126.97
+      "lng": 126.97,
+      "building_count": 1,
+      "aged_building_count": 1,
+      "average_approval_year": 1988,
+      "site_area_sqm": 123.4,
+      "total_floor_area_sqm": 266.2,
+      "floor_area_ratio": 215.72,
+      "primary_purpose_name": "제2종근린생활시설"
     }
   ]
 }
@@ -556,6 +574,8 @@
 비고:
 - `summary.zone_area_sqm`는 사용자가 그린 폴리곤 면적이 아니라, 90% 포함 기준을 통과한 포함 필지의 `area_sqm` 합계다.
 - `parcels[].geometry_geojson`는 지도에서 포함 필지를 별도 색상으로 강조하기 위한 도형 데이터다.
+- `summary.total_floor_area_sqm / summary.total_site_area_sqm` 기준으로 평균 용적률을 계산한다.
+- `summary.undersized_parcel_ratio`는 기본적으로 `150㎡ 미만 필지 비율`이다.
 
 ### POST `/map/zones`
 설명:
@@ -719,16 +739,23 @@
 ```
 
 ## 6. 예정 API (v3.x, 미구현)
-### POST `/map/zones/building-analysis`
+### POST `/map/zones/ai-suggestions`
 설명:
-- 저장된 구역 또는 좌표 기반 구역에 대해 건축물대장 분석 수행
-- 노후도(%), 평균 사용승인년도, 평균 용적률, 총연면적/총대지면적을 계산
+- 구역 분석 결과를 기반으로 경계 애매 필지에 대한 추천 포함/제외/검토 필요 결과를 생성
+- 최종 금액 계산을 대체하지 않고, 사용자 검토용 추천만 제공
+- 초기 구현은 LLM이 아니라 표 기반 ML 추론 서비스를 사용
 
 예정 요청:
 ```json
 {
   "zone_id": "zone-uuid",
-  "aging_threshold_years": 20
+  "mode": "boundary_review",
+  "candidate_policy": {
+    "min_overlap_ratio": 0.6,
+    "max_overlap_ratio": 0.95,
+    "include_adjacent": true,
+    "include_same_block": true
+  }
 }
 ```
 
@@ -736,13 +763,78 @@
 ```json
 {
   "zone_id": "zone-uuid",
-  "building_count": 42,
-  "aged_building_count": 29,
-  "aging_ratio": 69.05,
-  "average_approval_year": 1998,
-  "total_site_area": 12843.4,
-  "total_gross_floor_area": 18652.8,
-  "floor_area_ratio": 145.24
+  "model_version": "zone-boundary-lgbm-v1",
+  "generated_at": "2026-03-09T02:15:00+00:00",
+  "items": [
+    {
+      "pnu": "1111010100100010000",
+      "recommendation": "included",
+      "confidence": 0.91,
+      "reason_codes": ["HIGH_OVERLAP_RATIO", "ADJACENT_TO_INCLUDED_BLOCK"],
+      "reason_text": "경계 비율이 높고, 현재 포함 필지와 연속된 블록으로 판단됩니다."
+    },
+    {
+      "pnu": "1111010100100020000",
+      "recommendation": "uncertain",
+      "confidence": 0.54,
+      "reason_codes": ["BOUNDARY_CASE"],
+      "reason_text": "경계 인접 필지지만 포함 비율이 낮아 검토가 필요합니다."
+    }
+  ]
+}
+```
+
+### POST `/map/zones/ai-feedback`
+설명:
+- 추천 결과 대비 사용자의 최종 선택을 피드백 데이터로 저장
+- 모델 재학습용 라벨 데이터 축적 목적
+
+예정 요청:
+```json
+{
+  "zone_id": "zone-uuid",
+  "model_version": "zone-boundary-lgbm-v1",
+  "items": [
+    {
+      "pnu": "1111010100100010000",
+      "recommendation": "included",
+      "final_decision": "included"
+    },
+    {
+      "pnu": "1111010100100020000",
+      "recommendation": "uncertain",
+      "final_decision": "excluded"
+    }
+  ]
+}
+```
+
+예정 응답:
+```json
+{
+  "zone_id": "zone-uuid",
+  "saved_count": 2
+}
+```
+
+### POST `/map/zones/ai-report`
+설명:
+- 구역 분석 결과를 바탕으로 설명형 요약 리포트를 생성
+- 계산값은 기존 구역 분석 결과를 사용하고, LLM은 문장 생성만 담당
+
+예정 요청:
+```json
+{
+  "zone_id": "zone-uuid",
+  "style": "brief"
+}
+```
+
+예정 응답:
+```json
+{
+  "zone_id": "zone-uuid",
+  "summary_text": "해당 구역은 최신연도 기준 평균 공시지가가 높고, 경계 검토가 필요한 필지가 일부 존재합니다."
 }
 ```
 
@@ -765,5 +857,6 @@ FastAPI 기본 `detail` 형식 사용:
 - 파일조회: `BULK_FILE_INVALID`, `BULK_ROW_LIMIT_EXCEEDED`, `BULK_JOB_NOT_FOUND`, `BULK_JOB_NOT_READY`
 - 지도조회: `INVALID_COORDINATE`, `INVALID_PNU`, `MAP_ADDRESS_NOT_FOUND`, `PARCEL_NOT_FOUND`
 - 구역조회: `POSTGIS_REQUIRED`, `ZONE_TOO_FEW_POINTS`, `ZONE_TOO_MANY_POINTS`, `ZONE_AREA_TOO_LARGE`, `INVALID_ZONE_GEOMETRY`, `ZONE_ANALYSIS_NOT_FOUND`
-- 건축물대장(예정): `BUILDING_LEDGER_UNREACHABLE`, `BUILDING_LEDGER_RATE_LIMITED`, `BUILDING_LEDGER_NOT_FOUND`
+- 건축물대장: `BUILDING_LEDGER_UNREACHABLE`, `BUILDING_LEDGER_RATE_LIMITED`, `BUILDING_LEDGER_NOT_FOUND`
+- 구역 AI 추천(예정): `ZONE_AI_MODEL_UNAVAILABLE`, `ZONE_AI_FEEDBACK_INVALID`, `ZONE_AI_REPORT_FAILED`
 - 조회기록: `QUERY_LOG_NOT_FOUND`

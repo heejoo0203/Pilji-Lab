@@ -138,6 +138,28 @@
 - `updated_at` (DateTime(timezone=True), NOT NULL)
 - Unique 제약: `uq_zone_analysis_parcel` (`zone_analysis_id`, `pnu`)
 
+### 2.8 building_register_caches
+- `id` (String(36), PK)
+- `pnu` (String(19), UNIQUE, NOT NULL, INDEX)
+- `has_building_register` (Boolean, NOT NULL)
+- `building_count` (Integer, NOT NULL)
+- `aged_building_count` (Integer, NOT NULL)
+- `residential_building_count` (Integer, NOT NULL)
+- `approval_year_sum` (Integer, NOT NULL)
+- `approval_year_count` (Integer, NOT NULL)
+- `average_approval_year` (Integer, NULL)
+- `total_floor_area_sqm` (Float, NULL)
+- `site_area_sqm` (Float, NULL)
+- `floor_area_ratio` (Float, NULL)
+- `primary_purpose_name` (String(120), NULL)
+- `synced_at` (DateTime(timezone=True), NOT NULL, INDEX)
+- `updated_at` (DateTime(timezone=True), NOT NULL)
+
+비고:
+- 건축물대장 API 응답의 정규화 캐시 테이블이다.
+- 구역 요약의 노후도/평균 용적률/과소필지 비율 계산 시 우선 사용한다.
+- `approval_year_sum`, `approval_year_count`는 구역 평균 사용승인년도 재계산용 내부 집계 필드다.
+
 ## 3. 파일 저장소 구조
 - 대량조회 업로드/결과: `apps/api/storage/bulk`
 - 프로필 이미지: `apps/api/storage/profile_images`
@@ -153,7 +175,7 @@
 
 ## 5. 운영 체크포인트
 1. `alembic_version`이 `head`인지 확인
-2. 필수 테이블 존재 확인: `users`, `email_verifications`, `bulk_jobs`, `query_logs`, `parcels`, `zone_analyses`, `zone_analysis_parcels`
+2. 필수 테이블 존재 확인: `users`, `email_verifications`, `bulk_jobs`, `query_logs`, `parcels`, `zone_analyses`, `zone_analysis_parcels`, `building_register_caches`
 3. PostgreSQL 환경에서 `postgis_version()` 확인
 4. `parcels` 인덱스(`idx_parcels_geog_gist`, `idx_parcels_geom_gist`) 존재 확인
 5. 관리자 계정 시드 필요 시 `scripts/reset_db_and_seed_admin.py` 실행
@@ -161,21 +183,7 @@
 ## 6. 예정 스키마 확장 (v3.x)
 건축물대장 기반 노후도/용적률 분석을 위해 다음 확장을 권장한다.
 
-### 6.1 building_register_cache (예정)
-- `id` (String(36), PK)
-- `pnu` (String(19), NOT NULL, INDEX)
-- `building_mgmt_no` (String(50), NULL, INDEX)
-- `approval_date` (Date, NULL)
-- `site_area_sqm` (Float, NULL)
-- `gross_floor_area_sqm` (Float, NULL)
-- `floor_area_ratio` (Float, NULL)
-- `structure_name` (String(100), NULL)
-- `main_purpose_name` (String(100), NULL)
-- `source_api` (String(30), NOT NULL)
-- `raw_json` (Text, NOT NULL)
-- `fetched_at` (DateTime(timezone=True), NOT NULL, INDEX)
-
-### 6.2 zone_building_metrics (예정)
+### 6.1 zone_building_metrics (예정)
 - `id` (String(36), PK)
 - `zone_analysis_id` (String(36), FK -> `zone_analyses.id`, NOT NULL, UNIQUE)
 - `aging_threshold_years` (Integer, NOT NULL)
@@ -188,3 +196,51 @@
 - `floor_area_ratio` (Float, NULL)
 - `created_at` (DateTime(timezone=True), NOT NULL)
 - `updated_at` (DateTime(timezone=True), NOT NULL)
+
+### 6.2 zone_ai_suggestions (예정)
+- `id` (String(36), PK)
+- `zone_analysis_id` (String(36), FK -> `zone_analyses.id`, NOT NULL, INDEX)
+- `pnu` (String(19), NOT NULL, INDEX)
+- `model_version` (String(50), NOT NULL, INDEX)
+- `recommendation` (String(20), NOT NULL)  
+  허용: `included | excluded | uncertain`
+- `confidence` (Float, NOT NULL)
+- `reason_codes_json` (Text, NOT NULL)
+- `reason_text` (Text, NULL)
+- `generated_at` (DateTime(timezone=True), NOT NULL, INDEX)
+- Unique 제약(권장): `zone_analysis_id + pnu + model_version`
+
+비고:
+- 최종 계산 결과 테이블이 아니라, 사용자 검토용 추천 캐시/이력 테이블이다.
+- 구역 분석 원본 계산값은 계속 `zone_analysis_parcels`와 `parcels`가 기준이 된다.
+
+### 6.3 zone_ai_feedback (예정)
+- `id` (String(36), PK)
+- `zone_analysis_id` (String(36), FK -> `zone_analyses.id`, NOT NULL, INDEX)
+- `pnu` (String(19), NOT NULL, INDEX)
+- `model_version` (String(50), NOT NULL)
+- `recommendation` (String(20), NOT NULL)
+- `final_decision` (String(20), NOT NULL)
+- `user_id` (String(36), FK -> `users.id`, NOT NULL, INDEX)
+- `created_at` (DateTime(timezone=True), NOT NULL, INDEX)
+
+비고:
+- 사용자가 추천을 수락/거절/수정한 결과를 저장한다.
+- 향후 ML 재학습용 라벨 데이터셋의 원천으로 사용한다.
+
+### 6.4 zone_ai_model_registry (예정)
+- `id` (String(36), PK)
+- `model_name` (String(50), NOT NULL, INDEX)
+- `model_version` (String(50), NOT NULL, UNIQUE)
+- `model_type` (String(30), NOT NULL)  
+  예: `lightgbm`, `xgboost`, `rule-ensemble`
+- `status` (String(20), NOT NULL)  
+  예: `active | shadow | retired`
+- `feature_schema_json` (Text, NOT NULL)
+- `metrics_json` (Text, NOT NULL)
+- `created_at` (DateTime(timezone=True), NOT NULL)
+- `updated_at` (DateTime(timezone=True), NOT NULL)
+
+비고:
+- 운영 중인 추천 모델 버전과 성능 지표를 관리한다.
+- 계산 엔진을 대체하는 목적이 아니라 추천 모델 운영 메타데이터 관리용이다.

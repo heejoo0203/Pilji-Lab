@@ -14,6 +14,22 @@ export function rebuildZonePreview(zoneResult: MapZoneResponse, parcels: MapZone
   const assessedTotalPrice = countedParcels.reduce((sum, item) => sum + (item.estimated_total_price ?? 0), 0);
   const zoneAreaSqm = includedParcels.reduce((sum, item) => sum + (item.area_sqm ?? 0), 0);
   const averageUnitPrice = zoneAreaSqm > 0 ? Math.round(assessedTotalPrice / zoneAreaSqm) : null;
+  const totalBuildingCount = includedParcels.reduce((sum, item) => sum + (item.building_count ?? 0), 0);
+  const agedBuildingCount = includedParcels.reduce((sum, item) => sum + (item.aged_building_count ?? 0), 0);
+  const approvalYearRows = includedParcels.filter((item) => item.average_approval_year !== null);
+  const averageApprovalYear =
+    approvalYearRows.length > 0
+      ? Math.round(approvalYearRows.reduce((sum, item) => sum + (item.average_approval_year ?? 0), 0) / approvalYearRows.length)
+      : null;
+  const totalFloorAreaSqm = includedParcels.reduce((sum, item) => sum + (item.total_floor_area_sqm ?? 0), 0);
+  const totalSiteAreaSqm = includedParcels.reduce((sum, item) => sum + (item.site_area_sqm ?? 0), 0);
+  const averageFloorAreaRatio =
+    totalSiteAreaSqm > 0 && totalFloorAreaSqm > 0 ? Number(((totalFloorAreaSqm / totalSiteAreaSqm) * 100).toFixed(2)) : null;
+  const undersizedParcelCount = includedParcels.filter((item) => (item.area_sqm ?? 0) < 150).length;
+  const undersizedParcelRatio =
+    includedParcels.length > 0 ? Number(((undersizedParcelCount / includedParcels.length) * 100).toFixed(2)) : null;
+  const agedBuildingRatio =
+    totalBuildingCount > 0 ? Number(((agedBuildingCount / totalBuildingCount) * 100).toFixed(2)) : null;
 
   const nextParcels = parcels.map((item) => ({
     ...item,
@@ -32,6 +48,15 @@ export function rebuildZonePreview(zoneResult: MapZoneResponse, parcels: MapZone
       excluded_parcel_count: parcels.length - includedParcels.length,
       average_unit_price: averageUnitPrice,
       assessed_total_price: assessedTotalPrice,
+      total_building_count: totalBuildingCount,
+      aged_building_count: agedBuildingCount,
+      aged_building_ratio: agedBuildingRatio,
+      average_approval_year: averageApprovalYear,
+      total_floor_area_sqm: Number(totalFloorAreaSqm.toFixed(2)),
+      total_site_area_sqm: Number(totalSiteAreaSqm.toFixed(2)),
+      average_floor_area_ratio: averageFloorAreaRatio,
+      undersized_parcel_count: undersizedParcelCount,
+      undersized_parcel_ratio: undersizedParcelRatio,
       updated_at: new Date().toISOString(),
     },
     parcels: nextParcels,
