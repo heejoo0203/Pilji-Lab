@@ -81,6 +81,7 @@ function SearchPageClient() {
   const [message, setMessage] = useState("빠른 시작 예시를 선택하거나 주소를 입력해 바로 조회해 보세요.");
   const [rows, setRows] = useState<LandResultRow[]>([]);
   const [lookupPnu, setLookupPnu] = useState("");
+  const [lookupAddressSummary, setLookupAddressSummary] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [showLandDetails, setShowLandDetails] = useState(false);
   const [landDetails, setLandDetails] = useState<MapLandDetailsResponse | null>(null);
@@ -102,6 +103,14 @@ function SearchPageClient() {
   const resultAddress = latestRow
     ? [latestRow.토지소재지, latestRow.지번].filter(Boolean).join(" ")
     : null;
+  const mapContinueHref = useMemo(() => {
+    const query = new URLSearchParams();
+    if (lookupPnu) query.set("pnu", lookupPnu);
+    const address = (lookupAddressSummary || resultAddress || "").trim();
+    if (address) query.set("address", address);
+    const queryString = query.toString();
+    return queryString ? `/map?${queryString}` : "/map";
+  }, [lookupAddressSummary, lookupPnu, resultAddress]);
 
   useEffect(() => {
     void loadCodes();
@@ -118,6 +127,7 @@ function SearchPageClient() {
         if (ignore) return;
         setRows(rec.rows ?? []);
         setLookupPnu(rec.pnu ?? "");
+        setLookupAddressSummary(rec.address_summary ?? "");
         setLandDetails(null);
         setShowLandDetails(false);
         setShowNoResult((rec.rows ?? []).length === 0);
@@ -286,6 +296,7 @@ function SearchPageClient() {
       const text = error instanceof Error ? error.message : "조회 중 오류가 발생했습니다.";
       setRows([]);
       setLookupPnu("");
+      setLookupAddressSummary("");
       setLandDetails(null);
       setShowLandDetails(false);
       setShowNoResult(false);
@@ -317,6 +328,7 @@ function SearchPageClient() {
       const text = error instanceof Error ? error.message : "예시 조회 중 오류가 발생했습니다.";
       setRows([]);
       setLookupPnu("");
+      setLookupAddressSummary("");
       setLandDetails(null);
       setShowLandDetails(false);
       setShowNoResult(false);
@@ -371,12 +383,13 @@ function SearchPageClient() {
 
     const okPayload = payload as LandLookupApiResponse;
     const nextRows = okPayload.rows ?? [];
+    const summary = okPayload.address_summary || fallbackSummary;
     setRows(nextRows);
     setLookupPnu(okPayload.pnu ?? "");
+    setLookupAddressSummary(summary);
     setLandDetails(null);
     setShowLandDetails(false);
     setShowNoResult(nextRows.length === 0);
-    const summary = okPayload.address_summary || fallbackSummary;
     setMessage(`검색 완료: ${summary} (총 ${nextRows.length}건)`);
 
     if (isLoggedIn) {
@@ -711,7 +724,7 @@ function SearchPageClient() {
                       </button>
                       {isLoggedIn ? (
                         <>
-                          <Link href={lookupPnu ? `/map?pnu=${encodeURIComponent(lookupPnu)}` : "/map"} className="lab-card-link">
+                          <Link href={mapContinueHref} className="lab-card-link">
                             지도에서 이어서 보기
                           </Link>
                           <Link href="/history" className="lab-card-link secondary">
@@ -720,7 +733,7 @@ function SearchPageClient() {
                         </>
                       ) : (
                         <>
-                          <Link href={lookupPnu ? `/map?pnu=${encodeURIComponent(lookupPnu)}` : "/map"} className="lab-card-link">
+                          <Link href={mapContinueHref} className="lab-card-link">
                             지도에서 이어서 보기
                           </Link>
                           <button type="button" className="lab-card-link secondary" onClick={() => openAuth("login")}>

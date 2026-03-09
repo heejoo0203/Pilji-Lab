@@ -86,6 +86,7 @@ function MapPageClient() {
   const recordId = params.get("recordId");
   const zoneId = params.get("zoneId");
   const pnu = params.get("pnu");
+  const forwardedAddress = params.get("address")?.trim() ?? "";
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapFrameRef = useRef<HTMLDivElement | null>(null);
@@ -230,21 +231,38 @@ function MapPageClient() {
   }, []);
 
   useEffect(() => {
-    if (!pnu) return;
-    if (loadedPnuRef.current === pnu) return;
+    if (!pnu && !forwardedAddress) return;
+    const loadKey = pnu || `addr:${forwardedAddress}`;
+    if (loadedPnuRef.current === loadKey) return;
 
     let cancelled = false;
     const run = async () => {
       try {
-        const payload = await fetchMapLookupByPnu(pnu);
+        const payload = pnu ? await fetchMapLookupByPnu(pnu) : await searchMapLookupByAddress(forwardedAddress);
         if (cancelled) return;
-        loadedPnuRef.current = pnu;
+        loadedPnuRef.current = loadKey;
         setViewMode("basic");
         applyLookupResult(payload, {
           persistHistory: false,
           customMessage: "개별조회 결과에서 지도 기본조회로 이어졌습니다.",
         });
       } catch (error) {
+        if (cancelled) return;
+        if (pnu && forwardedAddress) {
+          try {
+            const payload = await searchMapLookupByAddress(forwardedAddress);
+            if (cancelled) return;
+            loadedPnuRef.current = loadKey;
+            setViewMode("basic");
+            applyLookupResult(payload, {
+              persistHistory: false,
+              customMessage: "개별조회 주소를 기준으로 지도 기본조회로 이어졌습니다.",
+            });
+            return;
+          } catch {
+            // 주소 fallback도 실패하면 기존 에러 메시지를 노출한다.
+          }
+        }
         if (cancelled) return;
         setMessage(error instanceof Error ? error.message : "개별조회 결과를 지도에서 불러오지 못했습니다.");
       }
@@ -254,7 +272,7 @@ function MapPageClient() {
     return () => {
       cancelled = true;
     };
-  }, [pnu]);
+  }, [forwardedAddress, pnu]);
 
   useEffect(() => {
     if (!recordId || !isLoggedIn) return;
@@ -271,10 +289,18 @@ function MapPageClient() {
           return;
         }
 
-        const payload = await fetchMapLookupByPnu(record.pnu);
-        if (cancelled) return;
-        setViewMode("basic");
-        applyLookupResult(payload, { persistHistory: false, customMessage: "조회기록에서 지도 결과를 불러왔습니다." });
+        try {
+          const payload = await fetchMapLookupByPnu(record.pnu);
+          if (cancelled) return;
+          setViewMode("basic");
+          applyLookupResult(payload, { persistHistory: false, customMessage: "조회기록에서 지도 결과를 불러왔습니다." });
+        } catch (error) {
+          if (!record.address_summary) throw error;
+          const payload = await searchMapLookupByAddress(record.address_summary);
+          if (cancelled) return;
+          setViewMode("basic");
+          applyLookupResult(payload, { persistHistory: false, customMessage: "조회기록 주소를 기준으로 지도 결과를 불러왔습니다." });
+        }
       } catch (error) {
         if (cancelled) return;
         setMessage(error instanceof Error ? error.message : "조회기록을 불러오지 못했습니다.");

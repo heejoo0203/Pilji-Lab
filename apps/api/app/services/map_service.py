@@ -163,18 +163,35 @@ def lookup_map_by_pnu(db: Session, pnu: str) -> MapLookupResponse:
             {"pnu": pnu},
         ).mappings().first()
 
-    if not row:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "PARCEL_NOT_FOUND", "message": "해당 PNU의 좌표 데이터가 없습니다."},
-        )
+    lat = _to_float(row.get("lat")) if row else None
+    lng = _to_float(row.get("lng")) if row else None
+    if row and _is_postgres(db):
+        lat = lat or _to_float(row.get("geom_lat"))
+        lng = lng or _to_float(row.get("geom_lng"))
 
-    lat = _to_float(row.get("lat")) or _to_float(row.get("geom_lat"))
-    lng = _to_float(row.get("lng")) or _to_float(row.get("geom_lng"))
+    if lat is None or lng is None:
+        fallback_address = _find_recent_address_summary(db, pnu)
+        if fallback_address:
+            try:
+                point = _geocode_address(fallback_address)
+                cached = _find_cached_parcel(db, pnu)
+                _upsert_parcel_snapshot(
+                    db=db,
+                    pnu=pnu,
+                    lat=point["lat"],
+                    lng=point["lng"],
+                    area=_to_float(cached.get("area")) if cached else None,
+                    price_current=_to_int(cached.get("price_current")) if cached else None,
+                    price_previous=_to_int(cached.get("price_previous")) if cached else None,
+                )
+                return lookup_map_by_click(db, MapClickRequest(lat=point["lat"], lng=point["lng"]))
+            except HTTPException:
+                pass
+
     if lat is None or lng is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "PARCEL_COORDINATE_MISSING", "message": "해당 PNU의 좌표가 비어 있습니다."},
+            detail={"code": "PARCEL_COORDINATE_MISSING", "message": "해당 PNU의 좌표 데이터가 없습니다."},
         )
 
     return lookup_map_by_click(db, MapClickRequest(lat=lat, lng=lng))
@@ -453,6 +470,26 @@ def _find_cached_parcel(db: Session, pnu: str) -> dict[str, Any] | None:
         {"pnu": pnu},
     ).mappings().first()
     return dict(row) if row else None
+
+
+def _find_recent_address_summary(db: Session, pnu: str) -> str:
+    row = db.execute(
+        text(
+            """
+            SELECT address_summary
+            FROM query_logs
+            WHERE pnu = :pnu
+              AND address_summary IS NOT NULL
+              AND address_summary <> ''
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"pnu": pnu},
+    ).mappings().first()
+    if not row:
+        return ""
+    return str(row.get("address_summary") or "").strip()
 
 
 def _upsert_parcel_snapshot(
