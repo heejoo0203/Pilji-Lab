@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     )
     map_zone_building_cache_ttl_hours: int = Field(default=720, alias="MAP_ZONE_BUILDING_CACHE_TTL_HOURS")
     map_zone_building_workers: int = Field(default=10, alias="MAP_ZONE_BUILDING_WORKERS")
+    map_zone_ai_enabled: bool = Field(default=True, alias="MAP_ZONE_AI_ENABLED")
+    map_zone_ai_include_threshold: float = Field(default=0.82, alias="MAP_ZONE_AI_INCLUDE_THRESHOLD")
+    map_zone_ai_uncertain_threshold: float = Field(default=0.55, alias="MAP_ZONE_AI_UNCERTAIN_THRESHOLD")
 
     email_verification_exp_minutes: int = Field(default=10, alias="EMAIL_VERIFICATION_EXP_MINUTES")
     email_verification_max_attempts: int = Field(default=5, alias="EMAIL_VERIFICATION_MAX_ATTEMPTS")

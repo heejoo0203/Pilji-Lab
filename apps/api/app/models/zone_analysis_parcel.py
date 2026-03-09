@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -32,6 +32,18 @@ class ZoneAnalysisParcel(Base):
     selected_by_rule: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     inclusion_mode: Mapped[str] = mapped_column(String(30), nullable=False, default="excluded")
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ai_recommendation: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ai_confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ai_reason_codes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_reason_text: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    ai_model_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    ai_applied: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    selection_origin: Mapped[str] = mapped_column(String(20), nullable=False, default="rule")
+    anomaly_codes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    anomaly_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    building_confidence: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    household_confidence: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    floor_area_ratio_confidence: Mapped[str | None] = mapped_column(String(20), nullable=True)
     included: Mapped[bool] = mapped_column(nullable=False, default=True)
     excluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     excluded_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)

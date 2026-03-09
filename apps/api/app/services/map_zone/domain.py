@@ -46,6 +46,18 @@ class ZoneParcelComputed:
     building_coverage_ratio: float | None = None
     household_count: int | None = None
     primary_purpose_name: str | None = None
+    ai_recommendation: str | None = None
+    ai_confidence_score: float | None = None
+    ai_reason_codes: list[str] | None = None
+    ai_reason_text: str | None = None
+    ai_model_version: str | None = None
+    ai_applied: bool = False
+    selection_origin: str = "rule"
+    anomaly_codes: list[str] | None = None
+    anomaly_level: str | None = None
+    building_confidence: str | None = None
+    household_confidence: str | None = None
+    floor_area_ratio_confidence: str | None = None
 
 
 @dataclass
@@ -60,4 +72,6 @@ class PreparedZonePreview:
     building_metrics_by_pnu: dict[str, Any]
     building_data_ready: bool
     building_data_message: str | None
+    ai_report_text: str | None
+    ai_model_version: str | None
     generated_at: datetime

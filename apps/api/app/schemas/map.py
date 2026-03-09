@@ -57,10 +57,18 @@ class MapZoneAnalyzeRequest(BaseModel):
 
 class MapZoneSaveRequest(MapZoneAnalyzeRequest):
     excluded_pnu_list: list[str] = Field(default_factory=list, description="저장 시 제외할 PNU 목록")
+    included_pnu_list: list[str] = Field(default_factory=list, description="저장 시 수동 포함할 PNU 목록")
 
 
 class MapZoneParcelExcludeRequest(BaseModel):
     pnu_list: list[str] = Field(min_length=1, description="분석 결과에서 제외할 PNU 목록")
+    reason: str | None = Field(default=None, max_length=200)
+
+
+class MapZoneParcelDecisionRequest(BaseModel):
+    include_pnu_list: list[str] = Field(default_factory=list, description="강제로 포함할 PNU 목록")
+    exclude_pnu_list: list[str] = Field(default_factory=list, description="강제로 제외할 PNU 목록")
+    decision_origin: str = Field(default="user", max_length=20, description="user 또는 ai")
     reason: str | None = Field(default=None, max_length=200)
 
 
@@ -86,6 +94,18 @@ class MapZoneParcelItem(BaseModel):
     selected_by_rule: bool = False
     inclusion_mode: str = "excluded"
     confidence_score: float = 0.0
+    ai_recommendation: str | None = None
+    ai_confidence_score: float | None = None
+    ai_reason_codes: list[str] = Field(default_factory=list)
+    ai_reason_text: str | None = None
+    ai_model_version: str | None = None
+    ai_applied: bool = False
+    selection_origin: str = "rule"
+    anomaly_codes: list[str] = Field(default_factory=list)
+    anomaly_level: str | None = None
+    building_confidence: str | None = None
+    household_confidence: str | None = None
+    floor_area_ratio_confidence: str | None = None
     included: bool
     counted_in_summary: bool
     lat: float | None
@@ -120,6 +140,12 @@ class MapZoneSummary(BaseModel):
     assessed_total_price: int
     geometry_assessed_total_price: int = 0
     algorithm_version: str = "zone-score-v3"
+    ai_model_version: str | None = None
+    ai_report_text: str | None = None
+    ai_recommended_include_count: int = 0
+    ai_uncertain_count: int = 0
+    ai_excluded_count: int = 0
+    anomaly_parcel_count: int = 0
     building_data_ready: bool = True
     building_data_message: str | None = None
     total_building_count: int = 0

@@ -75,6 +75,9 @@ MAP_ZONE_AGED_BUILDING_YEARS=30
 MAP_ZONE_UNDERSIZED_PARCEL_THRESHOLD_SQM=90
 MAP_ZONE_BUILDING_CACHE_TTL_HOURS=720
 MAP_ZONE_BUILDING_WORKERS=10
+MAP_ZONE_AI_ENABLED=true
+MAP_ZONE_AI_INCLUDE_THRESHOLD=0.82
+MAP_ZONE_AI_UNCERTAIN_THRESHOLD=0.55
 ```
 
 ### 3.2 Web (`apps/web`)
@@ -127,6 +130,7 @@ Root Directory: `apps/web`
 5. `/api/v1/map/click` 정상
 6. `/api/v1/map/zones/analyze` 정상
 7. 구역조회 응답에 `노후도`, `평균 용적률`, `과소필지 비율` 포함
+8. 구역조회 응답에 `AI 추천`, `AI 요약`, `이상치 검토`, `selection_origin` 포함
 
 ## 7. VWorld 우회 프록시(필요 시)
 Railway -> VWorld 직접 호출이 차단/불안정할 때 적용한다.

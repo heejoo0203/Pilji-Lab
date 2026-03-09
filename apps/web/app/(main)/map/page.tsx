@@ -24,6 +24,7 @@ import {
   renameMapZone,
   saveMapZone,
   searchMapLookupByAddress,
+  updateMapZoneParcelDecisions,
 } from "@/app/lib/map-api";
 import {
   buildZonePointMarker,
@@ -132,6 +133,9 @@ function MapPageClient() {
   const [showLandDetails, setShowLandDetails] = useState(false);
 
   const isLoggedIn = Boolean(user);
+  const aiApplicableCount = zoneResult
+    ? zoneResult.parcels.filter((item) => !item.included && item.ai_recommendation === "included").length
+    : 0;
 
   const handleModeChange = (nextMode: "basic" | "zone") => {
     if (nextMode === "zone" && !isLoggedIn) {
@@ -532,7 +536,12 @@ function MapPageClient() {
     setZoneSaveLoading(true);
     setMessage("구역을 저장 중입니다...");
     try {
-      const payload = await saveMapZone(name, zonePoints, getZoneExcludedPnuList(zoneResult));
+      const payload = await saveMapZone(
+        name,
+        zonePoints,
+        getZoneExcludedPnuList(zoneResult),
+        getZoneIncludedOverridePnuList(zoneResult),
+      );
       applyZoneResult(payload, {
         customMessage: "구역을 저장했습니다. 저장 구역 목록에서 다시 불러올 수 있습니다.",
         fitToZone: false,
@@ -557,11 +566,70 @@ function MapPageClient() {
         applyZoneResult(payload, { customMessage: "저장된 구역에서 선택한 필지를 제외했습니다.", fitToZone: false });
         await loadZoneList();
       } else {
-        const payload = applyLocalZoneExclusion(zoneResult, selectedZonePnuSet);
+        const payload = applyLocalZoneDecision(zoneResult, { excludePnuSet: selectedZonePnuSet });
         applyZoneResult(payload, { customMessage: "미리보기 결과에서 선택한 필지를 제외했습니다.", fitToZone: false });
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "필지 제외 처리에 실패했습니다.");
+    } finally {
+      setZoneExcludeLoading(false);
+    }
+  };
+
+  const runZoneInclude = async (decisionOrigin: "user" | "ai" = "user") => {
+    if (!zoneResult || selectedZonePnuSet.size === 0) {
+      return;
+    }
+    setZoneExcludeLoading(true);
+    try {
+      if (zoneResult.summary.is_saved && zoneResult.summary.zone_id) {
+        const payload = await updateMapZoneParcelDecisions(
+          zoneResult.summary.zone_id,
+          Array.from(selectedZonePnuSet),
+          [],
+          decisionOrigin,
+        );
+        applyZoneResult(payload, { customMessage: "선택한 필지를 계산 반영 목록에 포함했습니다.", fitToZone: false });
+        await loadZoneList();
+      } else {
+        const payload = applyLocalZoneDecision(zoneResult, { includePnuSet: selectedZonePnuSet, decisionOrigin });
+        applyZoneResult(payload, { customMessage: "미리보기 결과에서 선택한 필지를 포함했습니다.", fitToZone: false });
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "필지 포함 처리에 실패했습니다.");
+    } finally {
+      setZoneExcludeLoading(false);
+    }
+  };
+
+  const runZoneApplyAi = async () => {
+    if (!zoneResult) return;
+    const aiRecommendedPnuList = zoneResult.parcels
+      .filter((item) => !item.included && item.ai_recommendation === "included")
+      .map((item) => item.pnu);
+    if (aiRecommendedPnuList.length === 0) {
+      setMessage("현재 결과에서 자동 반영할 AI 추천 필지가 없습니다.");
+      return;
+    }
+
+    setZoneExcludeLoading(true);
+    try {
+      if (zoneResult.summary.is_saved && zoneResult.summary.zone_id) {
+        const payload = await updateMapZoneParcelDecisions(
+          zoneResult.summary.zone_id,
+          aiRecommendedPnuList,
+          [],
+          "ai",
+          "AI 추천 포함 반영",
+        );
+        applyZoneResult(payload, { customMessage: `AI 추천 필지 ${aiRecommendedPnuList.length}건을 반영했습니다.`, fitToZone: false });
+        await loadZoneList();
+      } else {
+        const payload = applyLocalZoneDecision(zoneResult, { includePnuSet: new Set(aiRecommendedPnuList), decisionOrigin: "ai" });
+        applyZoneResult(payload, { customMessage: `AI 추천 필지 ${aiRecommendedPnuList.length}건을 미리보기 결과에 반영했습니다.`, fitToZone: false });
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "AI 추천 반영에 실패했습니다.");
     } finally {
       setZoneExcludeLoading(false);
     }
@@ -704,16 +772,39 @@ function MapPageClient() {
     return payload.parcels.filter((item) => !item.included).map((item) => item.pnu);
   };
 
-  const applyLocalZoneExclusion = (payload: MapZoneResponse, excludedPnuSet: Set<string>): MapZoneResponse => {
-    const nextParcels = payload.parcels.map((item) =>
-      excludedPnuSet.has(item.pnu)
-        ? {
-            ...item,
-            included: false,
-            counted_in_summary: false,
-          }
-        : item,
-    );
+  const getZoneIncludedOverridePnuList = (payload: MapZoneResponse): string[] => {
+    return payload.parcels.filter((item) => item.included && !item.selected_by_rule).map((item) => item.pnu);
+  };
+
+  const applyLocalZoneDecision = (
+    payload: MapZoneResponse,
+    options: { includePnuSet?: Set<string>; excludePnuSet?: Set<string>; decisionOrigin?: "user" | "ai" },
+  ): MapZoneResponse => {
+    const includePnuSet = options.includePnuSet ?? new Set<string>();
+    const excludePnuSet = options.excludePnuSet ?? new Set<string>();
+    const decisionOrigin = options.decisionOrigin ?? "user";
+    const nextParcels = payload.parcels.map((item) => {
+      if (includePnuSet.has(item.pnu)) {
+        return {
+          ...item,
+          included: true,
+          ai_applied: decisionOrigin === "ai" && item.ai_recommendation === "included",
+          selection_origin: decisionOrigin === "ai" && item.ai_recommendation === "included" ? "ai" : "user",
+          inclusion_mode: item.selected_by_rule ? item.inclusion_mode : decisionOrigin === "ai" ? "ai_included" : "user_included",
+        };
+      }
+      if (excludePnuSet.has(item.pnu)) {
+        return {
+          ...item,
+          included: false,
+          counted_in_summary: false,
+          ai_applied: false,
+          selection_origin: "user",
+          inclusion_mode: item.selected_by_rule ? "user_excluded" : item.inclusion_mode,
+        };
+      }
+      return item;
+    });
     return rebuildZonePreview(payload, nextParcels);
   };
 
@@ -1102,6 +1193,22 @@ function MapPageClient() {
                     </div>
 
                     <div className="map-panel-actions map-zone-action-row">
+                      <button
+                        type="button"
+                        className="lab-btn lab-btn-secondary"
+                        onClick={() => void runZoneApplyAi()}
+                        disabled={!zoneResult || zoneExcludeLoading || aiApplicableCount === 0}
+                      >
+                        {zoneExcludeLoading ? "처리 중..." : `AI 추천 적용 (${aiApplicableCount})`}
+                      </button>
+                      <button
+                        type="button"
+                        className="lab-btn lab-btn-secondary"
+                        onClick={() => void runZoneInclude("user")}
+                        disabled={!zoneResult || selectedZonePnuSet.size === 0 || zoneExcludeLoading}
+                      >
+                        {zoneExcludeLoading ? "처리 중..." : `선택 포함 (${selectedZonePnuSet.size})`}
+                      </button>
                       {!zoneResult?.summary.is_saved ? (
                         <button type="button" className="lab-btn lab-btn-secondary" onClick={() => void runZoneSave()} disabled={!zoneResult || zoneSaveLoading}>
                           {zoneSaveLoading ? "저장 중..." : "구역 저장"}

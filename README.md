@@ -9,7 +9,7 @@
 - v2 핵심 확장: **카카오 지도조회 + 지도조회 기록 연동 + 조회기록 고급 필터/정렬**
 - v2.1 핵심 확장: **인증 UX 개선(이메일 중복확인, 약관 팝업, 아이디 저장, 이름/연락처 기반 아이디 찾기)**
 - v2.2 핵심 확장: **지도조회 완성도 강화 + 정책 페이지 + Android Wrapper 배포 정리**
-- 최신 확장: **구역조회 정확도 고도화 1차(경계 후보/신뢰도/이중 총가치)**
+- 최신 확장: **구역조회 정확도 고도화 2차(AI 추천/이상치/피드백 저장)**
 
 ## 주요 기능
 ### 1) 개별조회
@@ -42,6 +42,9 @@
   - 포함 필지 기준 총가치
   - 구역 내부 기준 총가치
   - 필지별 `overlap_ratio`, `confidence_score`, `inclusion_mode`
+  - 필지별 `ai_recommendation`, `ai_confidence_score`, `selection_origin`
+  - 구역 요약 `AI 추천 포함 수`, `AI 검토 필요 수`, `AI 요약 리포트`
+  - 규칙 기반 이상치 검토(`anomaly_level`)
 - 상세 조회 API 연동:
   - 연도별 가격행 조회
   - 토지 상세정보 조회(면적/지목/용도지역/용도지구)
@@ -108,6 +111,7 @@ copy apps\\web\\.env.example apps\\web\\.env.local
   - `MAIL_DELIVERY_MODE`, `MAIL_FROM`
   - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
   - (선택) `VWORLD_PROXY_URL`, `VWORLD_PROXY_TOKEN`
+  - `MAP_ZONE_AI_ENABLED`, `MAP_ZONE_AI_INCLUDE_THRESHOLD`, `MAP_ZONE_AI_UNCERTAIN_THRESHOLD`
 - Web(`apps/web/.env.local`)
   - `NEXT_PUBLIC_API_BASE_URL`
   - `NEXT_PUBLIC_KAKAO_MAP_APP_KEY`

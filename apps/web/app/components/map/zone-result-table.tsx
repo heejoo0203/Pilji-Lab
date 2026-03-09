@@ -37,6 +37,19 @@ function getConfidenceLabel(score: number): string {
   return "낮음";
 }
 
+function getAiRecommendationLabel(parcel: MapZoneResponse["parcels"][number]): string {
+  if (parcel.ai_recommendation === "included") return "추천 포함";
+  if (parcel.ai_recommendation === "uncertain") return "검토 필요";
+  if (parcel.ai_recommendation === "excluded") return "추천 제외";
+  return "-";
+}
+
+function getAnomalyLabel(parcel: MapZoneResponse["parcels"][number]): string {
+  if (!parcel.anomaly_level || parcel.anomaly_level === "none") return "없음";
+  if (parcel.anomaly_level === "critical") return "중요 검토";
+  return "검토 필요";
+}
+
 export function ZoneResultTable({
   zoneResult,
   selectedPnuSet,
@@ -87,6 +100,8 @@ export function ZoneResultTable({
         <MetricCard label="구역 내부 면적(㎡)" value={formatArea(summary.overlap_area_sqm_total)} />
         <MetricCard label="구역 내 필지 수" value={formatNumber(summary.parcel_count)} />
         <MetricCard label="경계 필지 수" value={formatNumber(summary.boundary_parcel_count)} />
+        <MetricCard label="AI 추천 포함" value={formatNumber(summary.ai_recommended_include_count)} />
+        <MetricCard label="AI 검토 필요" value={formatNumber(summary.ai_uncertain_count)} />
         <MetricCard label="평균 공시지가(원/㎡)" value={formatNumber(summary.average_unit_price)} />
         <MetricCard label="포함 필지 기준 총가치(원)" value={formatNumber(summary.assessed_total_price)} />
         <MetricCard label="구역 내부 기준 총가치(원)" value={formatNumber(summary.geometry_assessed_total_price)} />
@@ -99,6 +114,7 @@ export function ZoneResultTable({
         <MetricCard label="용적률(%)" value={formatNumber(summary.average_floor_area_ratio)} />
         <MetricCard label="과소필지 비율(%)" value={formatNumber(summary.undersized_parcel_ratio)} />
       </div>
+      {summary.ai_report_text ? <p className="hint">{summary.ai_report_text}</p> : null}
       <p className="hint">필지 포함 기준: 구역 내부 {overlapPercent}% 이상 포함된 경우만 집계하며, 계산 반영 필지는 지도에서 진하게 표시합니다.</p>
       <p className="hint">값 구분: 공시지가·용도지역은 원문값, 총가치는 계산값, 경계 후보/세대수 보정은 추정 또는 보정값입니다.</p>
       <p className="hint">건축 지표 기준: 노후도는 사용승인 30년 이상, 과소필지는 90㎡ 미만 필지를 기준으로 계산합니다.</p>
@@ -143,13 +159,7 @@ export function ZoneResultTable({
                 <Fragment key={row.pnu}>
                   <tr className={!row.included ? "excluded" : ""} onClick={() => onLocate(row.lat, row.lng)}>
                     <td className="center" data-label="선택" onClick={(event) => event.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        disabled={!row.included}
-                        onChange={(event) => onSelect(row.pnu, event.target.checked)}
-                        aria-label={`필지 선택 ${row.pnu}`}
-                      />
+                      <input type="checkbox" checked={selected} onChange={(event) => onSelect(row.pnu, event.target.checked)} aria-label={`필지 선택 ${row.pnu}`} />
                     </td>
                     <td className="address-col" data-label="지번 주소" onClick={(event) => event.stopPropagation()}>
                       <button type="button" className="map-address-link" onClick={() => onOpenBasic(row)}>
@@ -178,6 +188,24 @@ export function ZoneResultTable({
                           <div className="map-zone-detail-item">
                             <span>포함 판정</span>
                             <strong>{getInclusionLabel(row)}</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>AI 추천</span>
+                            <strong>{getAiRecommendationLabel(row)}</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>AI 신뢰도</span>
+                            <strong>
+                              {row.ai_confidence_score === null ? "-" : `${getConfidenceLabel(row.ai_confidence_score)} (${formatPercent(row.ai_confidence_score * 100)})`}
+                            </strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>AI 추천 사유</span>
+                            <strong>{row.ai_reason_text || "-"}</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>이상치 검토</span>
+                            <strong>{getAnomalyLabel(row)}</strong>
                           </div>
                           <div className="map-zone-detail-item">
                             <span>신뢰도</span>
@@ -230,6 +258,18 @@ export function ZoneResultTable({
                           <div className="map-zone-detail-item">
                             <span>잔여 용적률</span>
                             <strong>-</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>건축 데이터 신뢰도</span>
+                            <strong>{row.building_confidence || "-"}</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>세대수 신뢰도</span>
+                            <strong>{row.household_confidence || "-"}</strong>
+                          </div>
+                          <div className="map-zone-detail-item">
+                            <span>용적률 신뢰도</span>
+                            <strong>{row.floor_area_ratio_confidence || "-"}</strong>
                           </div>
                         </div>
                       </td>

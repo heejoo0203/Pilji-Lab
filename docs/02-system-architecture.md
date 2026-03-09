@@ -7,7 +7,9 @@
 - Database: PostgreSQL (Neon/Railway), 로컬 SQLite
 - Spatial: PostGIS (`geog`, `geom`)
 - Cache: Redis (좌표->PNU 캐시, 지도 조회 보조)
-- AI Assist (예정): 경계 보정 알고리즘 + 경계 필지 추천 ML + 설명 LLM
+- AI Assist:
+  - 현재: 휴리스틱 추천 엔진 + 이상치 탐지 + 추천 피드백 저장
+  - 예정: 경계 보정 알고리즘 + 경계 필지 추천 ML + 설명 LLM
 - External API:
   - VWorld (주소/좌표/공시지가/토지특성)
   - Kakao Maps JS SDK (지도 렌더링)
@@ -109,18 +111,20 @@
    - 건축물대장 API(`getBrTitleInfo`, 필요 시 `getBrRecapTitleInfo`) 조회
    - `building_register_caches` 캐시 적재
    - 노후도/총연면적/총대지면적/평균 용적률/과소필지 비율 계산
+   - 휴리스틱 AI 추천(`included | uncertain | excluded`) 생성
+   - AI 추천 사유/신뢰도/이상치 수준 계산
 4. 사용자가 `구역 저장`을 누르면 `/map/zones` 호출로 `zone_analyses`, `zone_analysis_parcels`에 영속 저장
 5. 프론트에서 요약 카드 + 필지 목록 + 선택 제외 + 저장 구역 사이드바 + CSV 다운로드 제공
 6. 결과 화면에서는 사실값/계산값/추정값 구분 안내를 함께 제공한다.
 
-### 3.6 구역 정확도 향상 보조 계층 (TO-BE)
+### 3.6 구역 정확도 향상 보조 계층 (현재)
 1. 사용자가 폴리곤을 그리면 기본 PostGIS 분석이 먼저 실행된다.
 2. 기본 포함 규칙(`overlap_ratio >= 0.9`)과 score 기반 규칙으로 1차 포함/경계/제외 필지를 분류한다.
-3. 선택적으로 `필지 경계 스냅/보정` 계층이 실행되어 사용자 폴리곤을 인접 필지 경계 기준으로 보정한다.
-4. 경계 구간 필지(`0.6~0.95`, 인접 필지, 연속 지번 후보)를 대상으로 `추천 ML`이 포함/제외/검토 필요 점수를 계산한다.
-5. 프론트는 `규칙 기반 포함`과 `추천 포함 후보`를 구분해 보여주고, 사용자가 최종 확정한다.
-6. 사용자 수동 수정 이력은 피드백 데이터로 적재된다.
-7. 필요 시 `LLM`은 추천 사유와 구역 요약 설명만 생성한다.
+3. 휴리스틱 AI 계층이 각 필지에 대해 `included | uncertain | excluded` 추천과 `ai_confidence_score`를 생성한다.
+4. AI 계층은 추천 사유(`ai_reason_codes`, `ai_reason_text`)와 이상치 수준(`anomaly_level`)을 함께 계산한다.
+5. 프론트는 `AI 추천 적용`, `선택 포함`, `선택 삭제` 액션으로 사용자가 최종 확정하도록 구성된다.
+6. 사용자의 수동 반영 결과는 `zone_ai_feedbacks`에 저장된다.
+7. 기능 플래그(`MAP_ZONE_AI_ENABLED`)로 AI 보조 계층을 즉시 비활성화할 수 있다.
 
 비고:
 - 최종 금액/면적 계산은 계속 PostGIS와 공식 공시지가 데이터가 담당한다.
@@ -141,7 +145,7 @@
 비고:
 - 운영 장애/이상치 분석과 재현성 확보를 위해 이 3계층 분리가 필요하다.
 
-### 3.6 조회기록
+### 3.8 조회기록
 1. `/history/query-logs`로 최신순 목록 조회
 2. 유형/시도/시군구 필터 및 정렬(`created_at`, `address_summary`, `search_type`, `result_count`)
 3. 다중 선택 삭제는 `/history/query-logs/delete`로 처리

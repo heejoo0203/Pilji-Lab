@@ -20,6 +20,7 @@ autoLV/
           20260309_0009_add_building_register_cache.py
           20260310_0010_add_building_register_extra_metrics.py
           20260310_0011_add_zone_accuracy_fields.py
+          20260310_0012_add_zone_ai_fields.py
       app/
         api/
           auth.py
@@ -42,6 +43,7 @@ autoLV/
           parcel.py
           zone_analysis.py
           zone_analysis_parcel.py
+          zone_ai_feedback.py
           building_register_cache.py
         repositories/
           user_repository.py
@@ -65,6 +67,7 @@ autoLV/
           building_register_service.py
           map_zone_service.py
           map_zone/
+            ai.py
             buildings.py
             domain.py
             geometry.py
@@ -196,12 +199,14 @@ autoLV/
 - 구역 사업성 분석은 `map_zone/*`와 `building_register_service.py`로 분리해 공간 계산과 건축물대장 연동 책임을 분리
 - 건축물대장 원본 응답은 `building_register_caches`에 캐시하고, 구역 응답은 실시간 집계만 수행
 - v3 정확도 고도화 기준으로 `map_zone/*`는 geometry / parcels / buildings / summary 도메인 단위로 유지
+- AI 1차 계층은 `map_zone/ai.py`에 격리해 추천/이상치/신뢰도 계산을 공간 계산 로직과 분리
+- AI 피드백은 `zone_ai_feedback.py` 모델과 `/map/zones/{zone_id}/parcels/decision` 경로로 분리
 - 향후 raw / normalized / serving 계층 도입 시 서비스/모델도 같은 단위로 분리
 
 ## 5. 향후 확장 권장
 - 지도 폴리곤 분석 고도화 시 AI/보정 계층 추가 권장:
-  - `app/services/map_zone_ai_service.py`
   - `app/services/map_zone_snap_service.py`
+  - `app/services/map_zone_ml_service.py`
   - `app/services/map_zone_feedback_service.py`
 - 운영 지표 도입 시 모듈 추가 권장:
   - `app/services/metrics_service.py`
@@ -214,7 +219,6 @@ autoLV/
 - AI 추천/설명 계층 확장 시 모듈 추가 권장:
   - `app/services/llm_report_service.py`
   - `app/models/zone_ai_suggestion.py`
-  - `app/models/zone_ai_feedback.py`
   - `app/models/zone_ai_model_registry.py`
 - raw / normalized / serving 계층 확장 시 모듈 추가 권장:
   - `app/models/vworld_raw_payload.py`

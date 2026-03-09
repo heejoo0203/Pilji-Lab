@@ -11,6 +11,7 @@ from app.schemas.map import (
     MapZoneAnalyzeRequest,
     MapZoneDeleteResponse,
     MapZoneListResponse,
+    MapZoneParcelDecisionRequest,
     MapZoneParcelExcludeRequest,
     MapZoneResponse,
     MapZoneSaveRequest,
@@ -34,6 +35,7 @@ from app.services.map_zone_service import (
     get_zone_detail,
     list_zone_analyses,
     save_zone_analysis,
+    update_zone_parcel_decisions,
     update_zone_name,
 )
 
@@ -138,6 +140,16 @@ def exclude_zone_lookup_parcels(
     current_user: User = Depends(_get_current_user),
 ) -> MapZoneResponse:
     return exclude_zone_parcels(db=db, user_id=current_user.id, zone_id=zone_id, payload=payload)
+
+
+@router.patch("/zones/{zone_id}/parcels/decision", response_model=MapZoneResponse)
+def update_zone_lookup_parcel_decisions(
+    zone_id: str,
+    payload: MapZoneParcelDecisionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_get_current_user),
+) -> MapZoneResponse:
+    return update_zone_parcel_decisions(db=db, user_id=current_user.id, zone_id=zone_id, payload=payload)
 
 
 @router.patch("/zones/{zone_id}", response_model=MapZoneResponse)

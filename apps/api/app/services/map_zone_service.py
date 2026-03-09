@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
@@ -10,6 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.zone_ai_feedback import ZoneAIFeedback
 from app.models.zone_analysis import ZoneAnalysis
 from app.models.zone_analysis_parcel import ZoneAnalysisParcel
 from app.schemas.map import (
@@ -18,6 +20,7 @@ from app.schemas.map import (
     MapZoneDeleteResponse,
     MapZoneListItem,
     MapZoneListResponse,
+    MapZoneParcelDecisionRequest,
     MapZoneParcelExcludeRequest,
     MapZoneParcelItem,
     MapZoneResponse,
@@ -26,6 +29,7 @@ from app.schemas.map import (
     MapZoneUpdateRequest,
 )
 from app.services.building_register_service import fetch_building_register_metrics_batch
+from app.services.map_zone.ai import enrich_zone_ai
 from app.services.map_zone.buildings import calculate_zone_building_summary
 from app.services.map_zone.domain import PreparedZonePreview
 from app.services.map_zone.geometry import (
@@ -62,6 +66,81 @@ def _calculate_growth_rate(current_price: int | None, previous_price: int | None
     if current_price is None or previous_price in (None, 0):
         return None
     return round(((current_price - previous_price) / previous_price) * 100, 2)
+
+
+def _deserialize_codes(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed if item]
+    except (TypeError, ValueError):
+        return []
+    return []
+
+
+def _serialize_codes(value: list[str] | None) -> str | None:
+    if not value:
+        return None
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _resolve_preview_included_set(
+    preview: PreparedZonePreview,
+    *,
+    included_pnu_list: list[str] | None = None,
+    excluded_pnu_list: list[str] | None = None,
+) -> set[str]:
+    included_set = {item.pnu for item in preview.parcels if item.selected_by_rule}
+    included_set.update(pnu.strip() for pnu in (included_pnu_list or []) if pnu.strip())
+    included_set.difference_update(pnu.strip() for pnu in (excluded_pnu_list or []) if pnu.strip())
+    return included_set
+
+
+def _resolve_row_inclusion_state(
+    *,
+    selected_by_rule: bool,
+    included: bool,
+    ai_recommendation: str | None,
+    decision_origin: str | None,
+) -> tuple[str, str, bool]:
+    normalized_origin = (decision_origin or "").strip().lower() or "user"
+    if included:
+        if selected_by_rule:
+            return "rule_overlap", "rule", False
+        if normalized_origin == "ai" and ai_recommendation == "included":
+            return "ai_included", "ai", True
+        return "user_included", normalized_origin, False
+    if selected_by_rule:
+        return "user_excluded", normalized_origin, False
+    if ai_recommendation == "included":
+        return "ai_not_applied", normalized_origin, False
+    return "excluded", normalized_origin, False
+
+
+def _append_ai_feedback(
+    db: Session,
+    *,
+    zone_analysis_id: str,
+    user_id: str,
+    pnu: str,
+    ai_model_version: str | None,
+    ai_recommendation: str | None,
+    final_decision: str,
+    decision_origin: str,
+) -> None:
+    db.add(
+        ZoneAIFeedback(
+            zone_analysis_id=zone_analysis_id,
+            pnu=pnu,
+            user_id=user_id,
+            ai_model_version=ai_model_version,
+            ai_recommendation=ai_recommendation,
+            final_decision=final_decision,
+            decision_origin=decision_origin,
+        )
+    )
 
 
 def _fetch_parcel_price_snapshot_map(db: Session, pnu_list: list[str]) -> dict[str, dict[str, int | None]]:
@@ -118,12 +197,18 @@ def save_zone_analysis(
         ),
     )
     excluded_pnu_set = {pnu.strip() for pnu in payload.excluded_pnu_list if pnu.strip()}
+    explicit_included_pnu_set = {pnu.strip() for pnu in payload.included_pnu_list if pnu.strip()}
+    final_included_pnu_set = _resolve_preview_included_set(
+        preview,
+        included_pnu_list=list(explicit_included_pnu_set),
+        excluded_pnu_list=list(excluded_pnu_set),
+    )
     analysis = ZoneAnalysis(
         user_id=user_id,
         zone_name=preview.zone_name,
         zone_wkt=preview.zone_wkt,
         overlap_threshold=preview.threshold,
-        zone_area_sqm=preview.zone_area_sqm,
+        zone_area_sqm=preview.summary["zone_area_sqm"],
         base_year=preview.summary["base_year"],
         parcel_count=preview.summary["parcel_count"],
         counted_parcel_count=preview.summary["counted_parcel_count"],
@@ -135,8 +220,18 @@ def save_zone_analysis(
     db.flush()
 
     for item in preview.parcels:
-        included = item.selected_by_rule and item.pnu not in excluded_pnu_set
-        inclusion_mode = item.inclusion_mode if included else ("user_excluded" if item.selected_by_rule else item.inclusion_mode)
+        included = item.pnu in final_included_pnu_set
+        row_decision_origin = (
+            "ai"
+            if item.pnu in explicit_included_pnu_set and item.ai_recommendation == "included"
+            else "user"
+        )
+        inclusion_mode, selection_origin, ai_applied = _resolve_row_inclusion_state(
+            selected_by_rule=item.selected_by_rule,
+            included=included,
+            ai_recommendation=item.ai_recommendation,
+            decision_origin=row_decision_origin,
+        )
         excluded_reason = None
         if not included:
             excluded_reason = "저장 전 사용자 제외" if item.selected_by_rule else "자동 제외"
@@ -157,6 +252,18 @@ def save_zone_analysis(
                 selected_by_rule=item.selected_by_rule,
                 inclusion_mode=inclusion_mode,
                 confidence_score=item.confidence_score,
+                ai_recommendation=item.ai_recommendation,
+                ai_confidence_score=item.ai_confidence_score,
+                ai_reason_codes=_serialize_codes(item.ai_reason_codes),
+                ai_reason_text=item.ai_reason_text,
+                ai_model_version=item.ai_model_version,
+                ai_applied=ai_applied,
+                selection_origin=selection_origin,
+                anomaly_codes=_serialize_codes(item.anomaly_codes),
+                anomaly_level=item.anomaly_level,
+                building_confidence=item.building_confidence,
+                household_confidence=item.household_confidence,
+                floor_area_ratio_confidence=item.floor_area_ratio_confidence,
                 included=included,
                 excluded_reason=excluded_reason,
                 excluded_at=None if included else preview.generated_at,
@@ -164,6 +271,17 @@ def save_zone_analysis(
                 lng=item.lng,
             )
         )
+        if included != item.selected_by_rule:
+            _append_ai_feedback(
+                db,
+                zone_analysis_id=analysis.id,
+                user_id=user_id,
+                pnu=item.pnu,
+                ai_model_version=item.ai_model_version,
+                ai_recommendation=item.ai_recommendation,
+                final_decision="included" if included else "excluded",
+                decision_origin=selection_origin,
+            )
 
     recalculate_zone_summary(db, analysis)
     db.commit()
@@ -209,6 +327,18 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
             selected_by_rule=bool(row.selected_by_rule),
             inclusion_mode=str(row.inclusion_mode or ("rule_overlap" if row.included else "excluded")),
             confidence_score=round(float(row.confidence_score or 0.0), 4),
+            ai_recommendation=row.ai_recommendation,
+            ai_confidence_score=round(float(row.ai_confidence_score), 4) if row.ai_confidence_score is not None else None,
+            ai_reason_codes=_deserialize_codes(row.ai_reason_codes),
+            ai_reason_text=row.ai_reason_text,
+            ai_model_version=row.ai_model_version,
+            ai_applied=bool(row.ai_applied),
+            selection_origin=str(row.selection_origin or "rule"),
+            anomaly_codes=_deserialize_codes(row.anomaly_codes),
+            anomaly_level=row.anomaly_level,
+            building_confidence=row.building_confidence,
+            household_confidence=row.household_confidence,
+            floor_area_ratio_confidence=row.floor_area_ratio_confidence,
             included=bool(row.included),
             counted_in_summary=bool(
                 row.included and row.price_current is not None and row.price_year is not None and row.price_year == base_year
@@ -294,6 +424,12 @@ def get_zone_detail(db: Session, *, user_id: str, zone_id: str) -> MapZoneRespon
         assessed_total_price=int(analysis.assessed_total_price),
         geometry_assessed_total_price=int(geometry_assessed_total_price),
         algorithm_version=ZONE_ANALYSIS_ALGORITHM_VERSION,
+        ai_model_version=rows[0].ai_model_version if rows else None,
+        ai_report_text=_build_saved_zone_ai_report(parcels),
+        ai_recommended_include_count=sum(1 for row in parcels if row.ai_recommendation == "included"),
+        ai_uncertain_count=sum(1 for row in parcels if row.ai_recommendation == "uncertain"),
+        ai_excluded_count=sum(1 for row in parcels if row.ai_recommendation == "excluded"),
+        anomaly_parcel_count=sum(1 for row in parcels if row.anomaly_level and row.anomaly_level != "none"),
         building_data_ready=building_batch.ready,
         building_data_message=building_batch.message,
         total_building_count=int(building_summary["total_building_count"]),
@@ -353,13 +489,35 @@ def exclude_zone_parcels(
     zone_id: str,
     payload: MapZoneParcelExcludeRequest,
 ) -> MapZoneResponse:
+    return update_zone_parcel_decisions(
+        db,
+        user_id=user_id,
+        zone_id=zone_id,
+        payload=MapZoneParcelDecisionRequest(
+            include_pnu_list=[],
+            exclude_pnu_list=payload.pnu_list,
+            decision_origin="user",
+            reason=payload.reason,
+        ),
+    )
+
+
+def update_zone_parcel_decisions(
+    db: Session,
+    *,
+    user_id: str,
+    zone_id: str,
+    payload: MapZoneParcelDecisionRequest,
+) -> MapZoneResponse:
     analysis = get_zone_analysis_or_404(db, user_id=user_id, zone_id=zone_id)
 
-    pnu_list = [pnu.strip() for pnu in payload.pnu_list if pnu.strip()]
-    if not pnu_list:
+    include_pnu_list = [pnu.strip() for pnu in payload.include_pnu_list if pnu.strip()]
+    exclude_pnu_list = [pnu.strip() for pnu in payload.exclude_pnu_list if pnu.strip()]
+    target_pnu_list = list(dict.fromkeys(include_pnu_list + exclude_pnu_list))
+    if not target_pnu_list:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "EMPTY_PNU_LIST", "message": "제외할 필지를 선택해 주세요."},
+            detail={"code": "EMPTY_PNU_LIST", "message": "포함 또는 제외할 필지를 선택해 주세요."},
         )
 
     now = datetime.now(timezone.utc)
@@ -367,7 +525,7 @@ def exclude_zone_parcels(
         db.query(ZoneAnalysisParcel)
         .filter(
             ZoneAnalysisParcel.zone_analysis_id == zone_id,
-            ZoneAnalysisParcel.pnu.in_(pnu_list),
+            ZoneAnalysisParcel.pnu.in_(target_pnu_list),
         )
         .all()
     )
@@ -377,12 +535,54 @@ def exclude_zone_parcels(
             detail={"code": "ZONE_PARCELS_NOT_FOUND", "message": "선택한 필지를 찾을 수 없습니다."},
         )
 
+    include_pnu_set = set(include_pnu_list)
+    exclude_pnu_set = set(exclude_pnu_list)
+    decision_origin = (payload.decision_origin or "user").strip().lower() or "user"
+    reason = (payload.reason or "사용자 수동 조정").strip()[:200] or "사용자 수동 조정"
+
     for row in rows:
-        row.included = False
-        row.excluded_at = now
-        row.excluded_reason = (payload.reason or "사용자 수동 제외").strip()[:200] or "사용자 수동 제외"
-        row.inclusion_mode = "user_excluded"
-        row.updated_at = now
+        if row.pnu in include_pnu_set:
+            row.included = True
+            row.excluded_at = None
+            row.excluded_reason = None
+            row.inclusion_mode, row.selection_origin, row.ai_applied = _resolve_row_inclusion_state(
+                selected_by_rule=bool(row.selected_by_rule),
+                included=True,
+                ai_recommendation=row.ai_recommendation,
+                decision_origin=decision_origin,
+            )
+            row.updated_at = now
+            _append_ai_feedback(
+                db,
+                zone_analysis_id=analysis.id,
+                user_id=user_id,
+                pnu=row.pnu,
+                ai_model_version=row.ai_model_version,
+                ai_recommendation=row.ai_recommendation,
+                final_decision="included",
+                decision_origin=row.selection_origin,
+            )
+        elif row.pnu in exclude_pnu_set:
+            row.included = False
+            row.excluded_at = now
+            row.excluded_reason = reason
+            row.inclusion_mode, row.selection_origin, row.ai_applied = _resolve_row_inclusion_state(
+                selected_by_rule=bool(row.selected_by_rule),
+                included=False,
+                ai_recommendation=row.ai_recommendation,
+                decision_origin=decision_origin,
+            )
+            row.updated_at = now
+            _append_ai_feedback(
+                db,
+                zone_analysis_id=analysis.id,
+                user_id=user_id,
+                pnu=row.pnu,
+                ai_model_version=row.ai_model_version,
+                ai_recommendation=row.ai_recommendation,
+                final_decision="excluded",
+                decision_origin=row.selection_origin,
+            )
         db.add(row)
 
     recalculate_zone_summary(db, analysis)
@@ -445,6 +645,10 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
             "centroid_in",
             "inclusion_mode",
             "confidence_score",
+            "ai_recommendation",
+            "ai_confidence_score",
+            "selection_origin",
+            "anomaly_level",
             "included",
             "counted_in_summary",
             "algorithm_version",
@@ -476,6 +680,10 @@ def export_zone_csv(db: Session, *, user_id: str, zone_id: str) -> Response:
                 "Y" if row.centroid_in else "N",
                 row.inclusion_mode,
                 f"{row.confidence_score:.4f}",
+                row.ai_recommendation or "",
+                f"{row.ai_confidence_score:.4f}" if row.ai_confidence_score is not None else "",
+                row.selection_origin,
+                row.anomaly_level or "",
                 "Y" if row.included else "N",
                 "Y" if row.counted_in_summary else "N",
                 response.summary.algorithm_version,
@@ -549,6 +757,7 @@ def _prepare_zone_preview(db: Session, *, payload: MapZoneAnalyzeRequest) -> Pre
         item.building_coverage_ratio = metrics.building_coverage_ratio
         item.household_count = metrics.household_count
         item.primary_purpose_name = metrics.primary_purpose_name
+    ai_summary = enrich_zone_ai(parcels)
     summary = calculate_summary(parcels)
     return PreparedZonePreview(
         zone_name=zone_name,
@@ -561,6 +770,8 @@ def _prepare_zone_preview(db: Session, *, payload: MapZoneAnalyzeRequest) -> Pre
         building_metrics_by_pnu=building_batch.metrics_by_pnu,
         building_data_ready=building_batch.ready,
         building_data_message=building_batch.message,
+        ai_report_text=ai_summary["ai_report_text"] if isinstance(ai_summary["ai_report_text"], str) else None,
+        ai_model_version=ai_summary["ai_model_version"] if isinstance(ai_summary["ai_model_version"], str) else None,
         generated_at=datetime.now(timezone.utc),
     )
 
@@ -603,6 +814,24 @@ def _build_zone_response(
                 else ("user_excluded" if item.selected_by_rule else item.inclusion_mode)
             ),
             confidence_score=item.confidence_score,
+            ai_recommendation=item.ai_recommendation,
+            ai_confidence_score=item.ai_confidence_score,
+            ai_reason_codes=item.ai_reason_codes or [],
+            ai_reason_text=item.ai_reason_text,
+            ai_model_version=item.ai_model_version,
+            ai_applied=(
+                item.pnu in included_set and not item.selected_by_rule and item.ai_recommendation == "included"
+            ),
+            selection_origin=(
+                "rule"
+                if item.selected_by_rule and item.pnu in included_set
+                else ("ai" if item.pnu in included_set and item.ai_recommendation == "included" else "user")
+            ),
+            anomaly_codes=item.anomaly_codes or [],
+            anomaly_level=item.anomaly_level,
+            building_confidence=item.building_confidence,
+            household_confidence=item.household_confidence,
+            floor_area_ratio_confidence=item.floor_area_ratio_confidence,
             included=item.pnu in included_set,
             counted_in_summary=bool(
                 item.pnu in included_set
@@ -646,6 +875,12 @@ def _build_zone_response(
         assessed_total_price=summary_values["assessed_total_price"],
         geometry_assessed_total_price=summary_values["geometry_assessed_total_price"],
         algorithm_version=summary_values["algorithm_version"],
+        ai_model_version=preview.ai_model_version,
+        ai_report_text=preview.ai_report_text,
+        ai_recommended_include_count=sum(1 for item in parcels if item.ai_recommendation == "included"),
+        ai_uncertain_count=sum(1 for item in parcels if item.ai_recommendation == "uncertain"),
+        ai_excluded_count=sum(1 for item in parcels if item.ai_recommendation == "excluded"),
+        anomaly_parcel_count=sum(1 for item in parcels if item.anomaly_level and item.anomaly_level != "none"),
         building_data_ready=preview.building_data_ready,
         building_data_message=preview.building_data_message,
         total_building_count=int(building_summary["total_building_count"]),
@@ -664,4 +899,16 @@ def _build_zone_response(
         summary=summary,
         coordinates=[MapCoordinate(lat=lat, lng=lng) for lng, lat in preview.coordinates[:-1]],
         parcels=parcels,
+    )
+
+
+def _build_saved_zone_ai_report(parcels: list[MapZoneParcelItem]) -> str | None:
+    if not parcels:
+        return None
+    include_count = sum(1 for item in parcels if item.ai_recommendation == "included")
+    uncertain_count = sum(1 for item in parcels if item.ai_recommendation == "uncertain")
+    anomaly_count = sum(1 for item in parcels if item.anomaly_level and item.anomaly_level != "none")
+    return (
+        f"AI가 {len(parcels)}개 필지를 검토했습니다. 추천 포함 {include_count}건, "
+        f"경계 검토 {uncertain_count}건, 이상치 검토 {anomaly_count}건입니다."
     )

@@ -34,6 +34,10 @@ export function rebuildZonePreview(zoneResult: MapZoneResponse, parcels: MapZone
     includedParcels.length > 0 ? Number(((undersizedParcelCount / includedParcels.length) * 100).toFixed(2)) : null;
   const agedBuildingRatio =
     totalBuildingCount > 0 ? Number(((agedBuildingCount / totalBuildingCount) * 100).toFixed(2)) : null;
+  const aiRecommendedIncludeCount = parcels.filter((item) => item.ai_recommendation === "included").length;
+  const aiUncertainCount = parcels.filter((item) => item.ai_recommendation === "uncertain").length;
+  const aiExcludedCount = parcels.filter((item) => item.ai_recommendation === "excluded").length;
+  const anomalyParcelCount = parcels.filter((item) => item.anomaly_level && item.anomaly_level !== "none").length;
 
   const nextParcels = parcels.map((item) => ({
     ...item,
@@ -55,6 +59,11 @@ export function rebuildZonePreview(zoneResult: MapZoneResponse, parcels: MapZone
       average_unit_price: averageUnitPrice,
       assessed_total_price: assessedTotalPrice,
       geometry_assessed_total_price: geometryAssessedTotalPrice,
+      ai_recommended_include_count: aiRecommendedIncludeCount,
+      ai_uncertain_count: aiUncertainCount,
+      ai_excluded_count: aiExcludedCount,
+      anomaly_parcel_count: anomalyParcelCount,
+      ai_report_text: buildZoneAiReport(parcels),
       total_building_count: totalBuildingCount,
       aged_building_count: agedBuildingCount,
       aged_building_ratio: agedBuildingRatio,
@@ -68,6 +77,14 @@ export function rebuildZonePreview(zoneResult: MapZoneResponse, parcels: MapZone
     },
     parcels: nextParcels,
   };
+}
+
+export function buildZoneAiReport(parcels: MapZoneResponse["parcels"]): string | null {
+  if (parcels.length === 0) return null;
+  const includeCount = parcels.filter((item) => item.ai_recommendation === "included").length;
+  const uncertainCount = parcels.filter((item) => item.ai_recommendation === "uncertain").length;
+  const anomalyCount = parcels.filter((item) => item.anomaly_level && item.anomaly_level !== "none").length;
+  return `AI가 ${parcels.length}개 필지를 검토했습니다. 추천 포함 ${includeCount}건, 경계 검토 ${uncertainCount}건, 이상치 검토 ${anomalyCount}건입니다.`;
 }
 
 export function toPointKey(lat: number, lng: number): string {

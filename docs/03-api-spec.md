@@ -526,6 +526,12 @@
     "assessed_total_price": 923456700000,
     "geometry_assessed_total_price": 838102400000,
     "algorithm_version": "zone-score-v3.0.0",
+    "ai_model_version": "zone-ai-heuristic-v1.0.0",
+    "ai_report_text": "AI가 128개 필지를 검토했습니다. 추천 포함 9건, 경계 검토 11건, 이상치 검토 2건입니다.",
+    "ai_recommended_include_count": 9,
+    "ai_uncertain_count": 11,
+    "ai_excluded_count": 108,
+    "anomaly_parcel_count": 2,
     "building_data_ready": true,
     "building_data_message": null,
     "total_building_count": 94,
@@ -565,6 +571,18 @@
       "selected_by_rule": true,
       "inclusion_mode": "rule_overlap",
       "confidence_score": 0.93,
+      "ai_recommendation": "included",
+      "ai_confidence_score": 0.96,
+      "ai_reason_codes": ["RULE_INCLUDED", "HIGH_OVERLAP", "CENTROID_IN_ZONE"],
+      "ai_reason_text": "기본 포함 규칙을 충족했습니다. 필지 대부분이 구역 안에 포함됩니다. 필지 중심점이 구역 안에 있습니다.",
+      "ai_model_version": "zone-ai-heuristic-v1.0.0",
+      "ai_applied": false,
+      "selection_origin": "rule",
+      "anomaly_codes": [],
+      "anomaly_level": "none",
+      "building_confidence": "high",
+      "household_confidence": "medium",
+      "floor_area_ratio_confidence": "high",
       "included": true,
       "counted_in_summary": true,
       "lat": 37.58,
@@ -591,12 +609,16 @@
 - `summary.total_floor_area_sqm / summary.total_site_area_sqm` 기준으로 평균 용적률을 계산한다.
 - `summary.undersized_parcel_ratio`는 기본적으로 `90㎡ 미만 필지 비율`이다.
 - `parcels[].inclusion_mode`는 `rule_overlap | score_auto | boundary_candidate | excluded | user_excluded` 중 하나다.
-- `parcels[].confidence_score`는 현재 규칙 기반 score이며, 향후 AI 추천 confidence와 분리될 수 있다.
+- `parcels[].confidence_score`는 규칙 기반 score이며, `parcels[].ai_confidence_score`는 AI 추천 신뢰도다.
+- `summary.ai_report_text`는 휴리스틱 AI가 생성한 구역 추천 요약 문장이다.
+- `parcels[].selection_origin`은 최종 포함/제외의 출처(`rule | user | ai`)다.
+- `parcels[].anomaly_level`은 `none | review | critical` 중 하나다.
 
 ### POST `/map/zones`
 설명:
 - 구역 분석 미리보기 결과를 사용자가 명시적으로 저장할 때 호출
 - 저장 시 제외할 필지 목록을 함께 보낼 수 있다.
+- 저장 시 수동 포함할 경계 필지 목록도 함께 보낼 수 있다.
 - 인증: 로그인 필수(HttpOnly 쿠키)
 
 요청:
@@ -609,7 +631,8 @@
     { "lat": 37.566, "lng": 126.972 }
   ],
   "overlap_threshold": 0.9,
-  "excluded_pnu_list": ["1111010100100010000"]
+  "excluded_pnu_list": ["1111010100100010000"],
+  "included_pnu_list": ["1111010100100030000"]
 }
 ```
 
@@ -650,6 +673,10 @@ CSV 컬럼(주요):
 - `included`
 - `inclusion_mode`
 - `confidence_score`
+- `ai_recommendation`
+- `ai_confidence_score`
+- `selection_origin`
+- `anomaly_level`
 - `algorithm_version`
 
 ### GET `/map/zones`
@@ -691,6 +718,22 @@ CSV 컬럼(주요):
 {
   "pnu_list": ["1111010100100010000", "1111010100100020000"],
   "reason": "사용자 수동 제외"
+}
+```
+
+### PATCH `/map/zones/{zone_id}/parcels/decision`
+설명:
+- 저장된 구역 분석 결과에서 선택한 필지를 수동 포함/제외로 확정
+- AI 추천 적용 결과도 같은 엔드포인트로 기록
+- 인증: 로그인 필수(HttpOnly 쿠키)
+
+요청:
+```json
+{
+  "include_pnu_list": ["1111010100100030000"],
+  "exclude_pnu_list": ["1111010100100010000"],
+  "decision_origin": "ai",
+  "reason": "AI 추천 검토 후 반영"
 }
 ```
 

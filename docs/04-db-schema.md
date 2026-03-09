@@ -18,6 +18,7 @@
 - `20260309_0009`: `building_register_caches`
 - `20260310_0010`: `building_register_caches` 추가 지표(`건폐율`, `세대수`, `연면적`)
 - `20260310_0011`: `zone_analysis_parcels` 정확도 필드(`overlap_area_sqm`, `centroid_in`, `selected_by_rule`, `inclusion_mode`, `confidence_score`)
+- `20260310_0012`: `zone_analysis_parcels` AI/이상치/신뢰도 필드 + `zone_ai_feedbacks`
 
 ## 2. 테이블 상세
 ### 2.1 users
@@ -137,6 +138,18 @@
 - `selected_by_rule` (Boolean, NOT NULL)
 - `inclusion_mode` (String(30), NOT NULL)
 - `confidence_score` (Float, NOT NULL)
+- `ai_recommendation` (String(20), NULL)
+- `ai_confidence_score` (Float, NULL)
+- `ai_reason_codes` (Text, NULL)
+- `ai_reason_text` (String(300), NULL)
+- `ai_model_version` (String(40), NULL)
+- `ai_applied` (Boolean, NOT NULL)
+- `selection_origin` (String(20), NOT NULL)
+- `anomaly_codes` (Text, NULL)
+- `anomaly_level` (String(20), NULL)
+- `building_confidence` (String(20), NULL)
+- `household_confidence` (String(20), NULL)
+- `floor_area_ratio_confidence` (String(20), NULL)
 - `included` (Boolean, NOT NULL)
 - `excluded_at` (DateTime(timezone=True), NULL)
 - `excluded_reason` (String(200), NULL)
@@ -150,7 +163,10 @@
 - `included`는 최종 반영 여부다.
 - `selected_by_rule`는 규칙/점수 기반 기본 선택 결과다.
 - `inclusion_mode`는 `rule_overlap | score_auto | boundary_candidate | excluded | user_excluded`를 사용한다.
-- `confidence_score`는 현재 규칙 기반 점수이며, 이후 AI 추천 점수와 분리될 수 있다.
+- `confidence_score`는 규칙 기반 점수다.
+- `ai_recommendation`은 휴리스틱 AI의 권고 상태(`included | uncertain | excluded`)다.
+- `selection_origin`은 최종 포함/제외 결정의 출처(`rule | user | ai`)다.
+- `anomaly_level`은 `none | review | critical` 중 하나로 해석한다.
 
 ### 2.8 building_register_caches
 - `id` (String(36), PK)
@@ -176,6 +192,21 @@
 - 구역 요약의 노후도/평균 용적률/과소필지 비율 계산 시 우선 사용한다.
 - `approval_year_sum`, `approval_year_count`는 구역 평균 사용승인년도 재계산용 내부 집계 필드다.
 
+### 2.9 zone_ai_feedbacks
+- `id` (String(36), PK)
+- `zone_analysis_id` (String(36), FK -> `zone_analyses.id`, NOT NULL, INDEX)
+- `pnu` (String(19), NOT NULL, INDEX)
+- `user_id` (String(36), FK -> `users.id`, NOT NULL, INDEX)
+- `ai_model_version` (String(40), NULL)
+- `ai_recommendation` (String(20), NULL)
+- `final_decision` (String(20), NOT NULL)
+- `decision_origin` (String(20), NOT NULL)
+- `created_at` (DateTime(timezone=True), NOT NULL, INDEX)
+
+비고:
+- 사용자가 AI 추천을 수락/거절/수정한 결과를 저장한다.
+- ML 재학습 이전 단계에서도 추천 품질 회고와 운영 지표에 사용한다.
+
 ## 3. 파일 저장소 구조
 - 대량조회 업로드/결과: `apps/api/storage/bulk`
 - 프로필 이미지: `apps/api/storage/profile_images`
@@ -185,13 +216,13 @@
 ## 4. 데이터 보존/삭제 정책
 - `query_logs`: 사용자 조회기록 영구 저장(회원 탈퇴 시 함께 삭제)
 - `bulk_jobs`: 사용자 작업 이력 저장(회원 탈퇴 시 파일 포함 삭제)
-- `zone_analyses`, `zone_analysis_parcels`: 구역분석 이력/상세 저장(회원 탈퇴 시 함께 삭제)
+- `zone_analyses`, `zone_analysis_parcels`, `zone_ai_feedbacks`: 구역분석 이력/상세/AI 피드백 저장(회원 탈퇴 시 함께 삭제)
 - `email_verifications`: 인증 수명주기 테이블(만료/사용 완료 데이터 정리 권장)
 - `users`: 회원 탈퇴 시 관련 참조 데이터 정리 후 삭제
 
 ## 5. 운영 체크포인트
 1. `alembic_version`이 `head`인지 확인
-2. 필수 테이블 존재 확인: `users`, `email_verifications`, `bulk_jobs`, `query_logs`, `parcels`, `zone_analyses`, `zone_analysis_parcels`, `building_register_caches`
+2. 필수 테이블 존재 확인: `users`, `email_verifications`, `bulk_jobs`, `query_logs`, `parcels`, `zone_analyses`, `zone_analysis_parcels`, `building_register_caches`, `zone_ai_feedbacks`
 3. PostgreSQL 환경에서 `postgis_version()` 확인
 4. `parcels` 인덱스(`idx_parcels_geog_gist`, `idx_parcels_geom_gist`) 존재 확인
 5. 관리자 계정 시드 필요 시 `scripts/reset_db_and_seed_admin.py` 실행
@@ -230,7 +261,7 @@
 - 최종 계산 결과 테이블이 아니라, 사용자 검토용 추천 캐시/이력 테이블이다.
 - 구역 분석 원본 계산값은 계속 `zone_analysis_parcels`와 `parcels`가 기준이 된다.
 
-### 6.5 vworld_raw_payloads (예정)
+### 6.4 vworld_raw_payloads (예정)
 - `id` (String(36), PK)
 - `source_path` (String(120), NOT NULL, INDEX)
 - `request_key` (String(255), NOT NULL, INDEX)
@@ -242,7 +273,7 @@
 - VWorld 원문 응답 보관용 raw 계층이다.
 - 추후 값 재현, 장애 분석, 정규화 로직 회귀 검증에 사용한다.
 
-### 6.6 building_register_raw_payloads (예정)
+### 6.5 building_register_raw_payloads (예정)
 - `id` (String(36), PK)
 - `pnu` (String(19), NOT NULL, INDEX)
 - `endpoint_name` (String(80), NOT NULL, INDEX)
@@ -253,7 +284,7 @@
 비고:
 - 건축물대장 표제부/총괄표제부/전유부 원문 저장용 raw 계층이다.
 
-### 6.7 parcel_serving_snapshots (예정)
+### 6.6 parcel_serving_snapshots (예정)
 - `id` (String(36), PK)
 - `pnu` (String(19), NOT NULL, INDEX)
 - `base_year` (String(4), NOT NULL, INDEX)
@@ -270,21 +301,7 @@
 - 화면/다운로드/리포트에 바로 쓰는 serving 계층이다.
 - 동일 기준연도 기준의 재현성 확보용이다.
 
-### 6.3 zone_ai_feedback (예정)
-- `id` (String(36), PK)
-- `zone_analysis_id` (String(36), FK -> `zone_analyses.id`, NOT NULL, INDEX)
-- `pnu` (String(19), NOT NULL, INDEX)
-- `model_version` (String(50), NOT NULL)
-- `recommendation` (String(20), NOT NULL)
-- `final_decision` (String(20), NOT NULL)
-- `user_id` (String(36), FK -> `users.id`, NOT NULL, INDEX)
-- `created_at` (DateTime(timezone=True), NOT NULL, INDEX)
-
-비고:
-- 사용자가 추천을 수락/거절/수정한 결과를 저장한다.
-- 향후 ML 재학습용 라벨 데이터셋의 원천으로 사용한다.
-
-### 6.4 zone_ai_model_registry (예정)
+### 6.7 zone_ai_model_registry (예정)
 - `id` (String(36), PK)
 - `model_name` (String(50), NOT NULL, INDEX)
 - `model_version` (String(50), NOT NULL, UNIQUE)

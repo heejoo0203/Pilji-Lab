@@ -103,6 +103,7 @@ export async function saveMapZone(
   zoneName: string,
   coordinates: MapZoneCoordinate[],
   excludedPnuList: string[] = [],
+  includedPnuList: string[] = [],
   overlapThreshold?: number,
 ): Promise<MapZoneResponse> {
   const res = await apiFetch("/api/v1/map/zones", {
@@ -113,6 +114,7 @@ export async function saveMapZone(
       coordinates,
       overlap_threshold: overlapThreshold,
       excluded_pnu_list: excludedPnuList,
+      included_pnu_list: includedPnuList,
     }),
   }, { requireSameOriginAuth: true });
   const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
@@ -165,6 +167,30 @@ export async function excludeMapZoneParcels(
   const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
   if (!res.ok) {
     throw new Error(extractError(payload, "필지 제외 처리에 실패했습니다."));
+  }
+  return payload as MapZoneResponse;
+}
+
+export async function updateMapZoneParcelDecisions(
+  zoneId: string,
+  includePnuList: string[] = [],
+  excludePnuList: string[] = [],
+  decisionOrigin: "user" | "ai" = "user",
+  reason?: string,
+): Promise<MapZoneResponse> {
+  const res = await apiFetch(`/api/v1/map/zones/${encodeURIComponent(zoneId)}/parcels/decision`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      include_pnu_list: includePnuList,
+      exclude_pnu_list: excludePnuList,
+      decision_origin: decisionOrigin,
+      reason,
+    }),
+  }, { requireSameOriginAuth: true });
+  const payload = (await safeJson(res)) as MapZoneResponse | { detail?: unknown };
+  if (!res.ok) {
+    throw new Error(extractError(payload, "필지 포함/제외 조정에 실패했습니다."));
   }
   return payload as MapZoneResponse;
 }
