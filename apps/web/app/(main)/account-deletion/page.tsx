@@ -4,12 +4,12 @@ export default function AccountDeletionPage() {
       <section className="panel">
         <h2>계정 삭제 안내</h2>
         <p className="hint">
-          앱 이름: <strong>autoLV</strong>
+          앱 이름: <strong>필지랩</strong>
           <br />
           개발자: <strong>heejoo0203</strong>
         </p>
         <p className="hint">
-          autoLV 계정 삭제는 앱/웹에서 직접 요청할 수 있으며, 요청 시 관련 데이터는 아래 정책에 따라 삭제 또는 보관됩니다.
+          필지랩 계정 삭제는 앱/웹에서 직접 요청할 수 있으며, 요청 시 관련 데이터는 아래 정책에 따라 삭제 또는 보관됩니다.
         </p>
       </section>
 
@@ -17,7 +17,7 @@ export default function AccountDeletionPage() {
         <h3>1. 계정 삭제 요청 방법</h3>
         <ol className="privacy-ordered-list">
           <li>
-            autoLV 로그인 후 <strong>마이페이지</strong>로 이동
+            필지랩 로그인 후 <strong>마이페이지</strong>로 이동
           </li>
           <li>
             <strong>회원 탈퇴</strong> 영역에서 안내 문구를 정확히 입력
@@ -61,4 +61,3 @@ export default function AccountDeletionPage() {
     </>
   );
 }
-

@@ -8,7 +8,8 @@ import type { UserTerms } from "@/app/lib/types";
 
 type AssistMode = "none" | "find-id" | "reset-password";
 
-const REMEMBER_ID_KEY = "autolv_saved_login_email";
+const REMEMBER_ID_KEY = "piljilab_saved_login_email";
+const LEGACY_REMEMBER_ID_KEY = "autolv_saved_login_email";
 
 export function AuthModal() {
   const {
@@ -104,7 +105,10 @@ export function AuthModal() {
       return;
     }
 
-    const savedEmail = typeof window !== "undefined" ? window.localStorage.getItem(REMEMBER_ID_KEY) ?? "" : "";
+    const savedEmail =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(REMEMBER_ID_KEY) ?? window.localStorage.getItem(LEGACY_REMEMBER_ID_KEY) ?? ""
+        : "";
     const hasSavedEmail = Boolean(savedEmail.trim());
     setRememberId(hasSavedEmail);
     resetAuthForms({ keepLoginEmail: hasSavedEmail });
@@ -143,8 +147,10 @@ export function AuthModal() {
       if (typeof window !== "undefined") {
         if (rememberId) {
           window.localStorage.setItem(REMEMBER_ID_KEY, email);
+          window.localStorage.removeItem(LEGACY_REMEMBER_ID_KEY);
         } else {
           window.localStorage.removeItem(REMEMBER_ID_KEY);
+          window.localStorage.removeItem(LEGACY_REMEMBER_ID_KEY);
         }
       }
       resetAuthForms({ keepLoginEmail: rememberId });

@@ -112,4 +112,4 @@ def on_startup() -> None:
 
 @app.get("/")
 def read_root() -> dict:
-    return {"service": "autoLV-api", "status": "ok"}
+    return {"service": "piljilab-api", "status": "ok"}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useAuth } from "@/app/components/auth-provider";
+import { BrandLogo } from "@/app/components/brand-logo";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -69,14 +70,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const historyActive = pathname === "/history";
   const myPageActive = pathname === "/mypage";
   const isMapPage = pathname === "/map";
+  const featuresOrRootActive = pathname === "/features" || pathname === "/";
 
   return (
     <div className="app-shell">
       <header className="top-nav">
-        <Link href="/search" className="brand">
-          <span className="brand-auto">auto</span>
-          <span className="brand-lv">LV</span>
-        </Link>
+        <BrandLogo href="/features" priority withTagline size="md" />
 
         <nav className={`center-nav ${isLoggedIn ? "auth-nav" : "guest-nav"}`}>
           <div
@@ -163,6 +162,34 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <span>·</span>
         <Link href="/account-deletion">계정삭제 안내</Link>
       </footer>
+
+      <nav className="mobile-dock" aria-label="모바일 바로가기">
+        <Link href="/features" className={featuresOrRootActive ? "active" : ""}>
+          기능설명
+        </Link>
+        <Link href="/search" className={pathname === "/search" ? "active" : ""}>
+          개별조회
+        </Link>
+        {isLoggedIn ? (
+          <>
+            <Link href="/map" className={pathname === "/map" ? "active" : ""}>
+              지도조회
+            </Link>
+            <Link href="/mypage" className={myPageActive ? "active" : ""}>
+              마이페이지
+            </Link>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={() => openAuth("login")}>
+              로그인
+            </button>
+            <Link href="/privacy" className={pathname === "/privacy" ? "active" : ""}>
+              정책
+            </Link>
+          </>
+        )}
+      </nav>
     </div>
   );
 }

@@ -32,7 +32,7 @@ def _write_guide_sheet(sheet: object) -> None:
     if ws is None:
         return
 
-    ws["A1"] = "autoLV 파일조회 표준 양식 안내"
+    ws["A1"] = "필지랩 파일조회 표준 양식 안내"
     ws["A1"].font = Font(size=14, bold=True)
     ws.merge_cells("A1:D1")
 

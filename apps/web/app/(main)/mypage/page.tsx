@@ -64,22 +64,52 @@ export default function MyPage() {
 
   if (!isLoggedIn) {
     return (
-      <section className="panel">
-        <h2>마이페이지</h2>
-        <p className="hint">마이페이지는 로그인 후 사용할 수 있습니다.</p>
-        <button className="btn-primary" onClick={() => openAuth("login")}>
-          로그인하고 마이페이지 열기
-        </button>
-      </section>
+      <div className="mypage-shell">
+        <section className="mypage-hero hero-grid">
+          <div>
+            <span className="eyebrow">Account Center</span>
+            <h1 className="hero-title">계정, 보안, 약관 동의 내역을 한 곳에서 관리합니다.</h1>
+            <p className="hero-copy">필지랩 마이페이지는 회원 정보 수정부터 앱 다운로드, 계정 삭제까지 운영형 서비스 기준으로 구성돼 있습니다.</p>
+          </div>
+        </section>
+        <section className="panel">
+          <h2>마이페이지는 로그인 후 사용할 수 있습니다.</h2>
+          <p className="hint">로그인 후 계정 설정, 비밀번호 변경, 서비스 약관 확인, 앱 다운로드를 이용할 수 있습니다.</p>
+          <button className="btn-primary" onClick={() => openAuth("login")}>
+            로그인하고 마이페이지 열기
+          </button>
+        </section>
+      </div>
     );
   }
 
   return (
-    <>
-      <section className="panel">
-        <h2>마이페이지</h2>
-        <p className="hint">계정 정보, 보안 설정, 약관 동의 내역, 탈퇴 기능을 관리할 수 있습니다.</p>
-        {mergedMessage ? <p className="hint">{mergedMessage}</p> : null}
+    <div className="mypage-shell">
+      <section className="mypage-hero hero-grid">
+        <div>
+          <span className="eyebrow">Account Center</span>
+          <h1 className="hero-title">필지랩 계정과 서비스 설정을 한 화면에서 다룹니다.</h1>
+          <p className="hero-copy">프로필, 비밀번호, 약관 동의 내역, 모바일 앱 배포본, 회원 탈퇴까지 계정 운영 흐름을 정리했습니다.</p>
+          {mergedMessage ? <p className="hint">{mergedMessage}</p> : null}
+        </div>
+        <div className="hero-stat-grid">
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">이름</div>
+            <div className="hero-stat-value small">{user?.full_name || "-"}</div>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">이메일</div>
+            <div className="hero-stat-value small">{user?.email || "-"}</div>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">연락처</div>
+            <div className="hero-stat-value small">{user?.phone_number || "-"}</div>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">역할</div>
+            <div className="hero-stat-value small">{user?.role || "user"}</div>
+          </div>
+        </div>
       </section>
 
       <section className="panel mypage-grid">
@@ -209,7 +239,7 @@ export default function MyPage() {
         <article className="mypage-card">
           <h3>앱 다운로드</h3>
           <p className="hint">
-            안드로이드 기기에서 autoLV 앱을 설치해 모바일 환경에서 바로 사용할 수 있습니다.
+            안드로이드 기기에서 필지랩 앱을 설치해 모바일 환경에서 바로 사용할 수 있습니다.
           </p>
           <a
             className="btn-primary full"
@@ -218,7 +248,7 @@ export default function MyPage() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            안드로이드 앱 APK 다운로드
+            필지랩 안드로이드 APK 다운로드
           </a>
         </article>
 
@@ -248,6 +278,6 @@ export default function MyPage() {
           </button>
         </article>
       </section>
-    </>
+    </div>
   );
 }

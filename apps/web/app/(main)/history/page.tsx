@@ -219,21 +219,53 @@ export default function HistoryPage() {
 
   if (!isLoggedIn) {
     return (
-      <section className="panel">
-        <h2>조회기록</h2>
-        <p className="hint">조회기록은 로그인 후 확인할 수 있습니다.</p>
-        <button className="btn-primary" onClick={() => openAuth("login")}>
-          로그인하고 조회기록 보기
-        </button>
-      </section>
+      <div className="history-shell">
+        <section className="history-hero hero-grid">
+          <div>
+            <span className="eyebrow">History Archive</span>
+            <h1 className="hero-title">필지랩에서 수행한 조회 흐름을 기록 단위로 다시 불러옵니다.</h1>
+            <p className="hero-copy">로그인하면 개별조회와 지도조회 결과를 저장하고, 필터·정렬·선택 삭제까지 같은 화면에서 처리할 수 있습니다.</p>
+          </div>
+        </section>
+        <section className="panel">
+          <h2>조회기록은 로그인 후 확인할 수 있습니다.</h2>
+          <p className="hint">로그인 후 기록을 저장하고, 같은 필지를 다시 열어 개별조회 또는 지도조회 결과를 복원할 수 있습니다.</p>
+          <button className="btn-primary" onClick={() => openAuth("login")}>
+            로그인하고 조회기록 보기
+          </button>
+        </section>
+      </div>
     );
   }
 
   return (
-    <section className="panel">
-      <h2>조회기록</h2>
+    <div className="history-shell">
+      <section className="history-hero hero-grid">
+        <div>
+          <span className="eyebrow">History Archive</span>
+          <h1 className="hero-title">조회 흐름을 저장하고, 필요한 시점에 그대로 복원합니다.</h1>
+          <p className="hero-copy">
+            개별조회와 지도조회 결과를 유형·지역·정렬 기준으로 다시 필터링하고, 기록에서 바로 원래 화면으로 이동할 수 있습니다.
+          </p>
+        </div>
+        <div className="hero-stat-grid">
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">누적 기록</div>
+            <div className="hero-stat-value">{records.length}</div>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">현재 필터</div>
+            <div className="hero-stat-value small">
+              {searchTypeFilter === "all" ? "전체" : toSearchTypeLabel(searchTypeFilter)}
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <div className="history-filter-grid">
+      <section className="panel">
+        <h2>조회기록</h2>
+
+        <div className="history-filter-grid">
         <label className="field-label">
           유형 필터
           <select
@@ -318,9 +350,9 @@ export default function HistoryPage() {
         >
           필터 초기화
         </button>
-      </div>
+        </div>
 
-      <div className="bulk-table-head">
+        <div className="bulk-table-head">
         <h2>기록 목록</h2>
         <div className="bulk-head-actions">
           <button type="button" className="nav-item" onClick={() => void reloadRecords()} disabled={loading || deleting}>
@@ -335,14 +367,14 @@ export default function HistoryPage() {
             {deleting ? "삭제 중..." : "선택 삭제"}
           </button>
         </div>
-      </div>
+        </div>
 
-      {loading ? <p className="hint">불러오는 중...</p> : null}
-      {!loading && message ? <p className="hint">{message}</p> : null}
-      {records.length === 0 ? (
-        <div className="empty-box">조건에 맞는 조회기록이 없습니다.</div>
-      ) : (
-        <table className="data-table history-table mobile-card-table">
+        {loading ? <p className="hint">불러오는 중...</p> : null}
+        {!loading && message ? <p className="hint">{message}</p> : null}
+        {records.length === 0 ? (
+          <div className="empty-box">조건에 맞는 조회기록이 없습니다.</div>
+        ) : (
+          <table className="data-table history-table mobile-card-table">
           <thead>
             <tr>
               <th className="checkbox-col">
@@ -423,10 +455,11 @@ export default function HistoryPage() {
               </tr>
             ))}
           </tbody>
-        </table>
-      )}
-      <p className="hint">행을 클릭하면 해당 유형(개별조회/지도조회) 페이지로 이동해 결과를 다시 표시합니다.</p>
-    </section>
+          </table>
+        )}
+        <p className="hint">행을 클릭하면 해당 유형(개별조회/지도조회) 페이지로 이동해 결과를 다시 표시합니다.</p>
+      </section>
+    </div>
   );
 }
 

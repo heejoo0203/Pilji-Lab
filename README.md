@@ -1,6 +1,6 @@
-# autoLV
+# 필지랩
 
-autoLV는 **개별공시지가 조회/분석 서비스**입니다.  
+필지랩은 **개별공시지가 조회·구역 분석 서비스**입니다.  
 지번/도로명 단건 조회, 엑셀 대량 조회, 지도 기반 조회, 조회기록 관리 기능을 제공합니다.
 
 ## 릴리즈 상태
@@ -134,7 +134,7 @@ npx cap sync android
 npm run android:build:debug
 ```
 
-APK 다운로드:
+필지랩 APK 다운로드:
 - 운영 URL: [`https://auto-lv.vercel.app/downloads/autoLV-android-release-v2.2.0.apk`](https://auto-lv.vercel.app/downloads/autoLV-android-release-v2.2.0.apk)
 - 저장소 파일: [`apps/web/public/downloads/autoLV-android-release-v2.2.0.apk`](apps/web/public/downloads/autoLV-android-release-v2.2.0.apk)
 - Play Console 업로드용 AAB: `apps/mobile/android/app/build/outputs/bundle/release/app-release.aab`

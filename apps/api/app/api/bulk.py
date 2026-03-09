@@ -49,7 +49,7 @@ def download_bulk_template() -> Response:
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="autolv_bulk_template.xlsx"'},
+        headers={"Content-Disposition": 'attachment; filename="piljilab_bulk_template.xlsx"'},
     )
 
 

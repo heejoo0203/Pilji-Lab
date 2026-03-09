@@ -502,10 +502,10 @@ def _assert_reset_target_exists(db: Session, email: str) -> None:
 
 def _build_mail_subject(purpose: str) -> str:
     if purpose == RecoveryPurpose.SIGNUP:
-        return "[autoLV] 회원가입 이메일 인증 코드"
+        return "[필지랩] 회원가입 이메일 인증 코드"
     if purpose == RecoveryPurpose.FIND_ID:
-        return "[autoLV] 아이디 찾기 인증 코드"
-    return "[autoLV] 비밀번호 재설정 인증 코드"
+        return "[필지랩] 아이디 찾기 인증 코드"
+    return "[필지랩] 비밀번호 재설정 인증 코드"
 
 
 def _build_mail_body(purpose: str, code: str, expire_minutes: int) -> str:
@@ -517,7 +517,7 @@ def _build_mail_body(purpose: str, code: str, expire_minutes: int) -> str:
         title = "비밀번호 재설정 인증"
 
     return (
-        f"autoLV {title} 코드 안내\n\n"
+        f"필지랩 {title} 코드 안내\n\n"
         f"인증 코드: {code}\n"
         f"유효시간: {expire_minutes}분\n\n"
         "본인이 요청하지 않았다면 이 메일을 무시해 주세요."

@@ -7,7 +7,7 @@
 ### GET `/`
 응답 200:
 ```json
-{ "service": "autoLV-api", "status": "ok" }
+{ "service": "piljilab-api", "status": "ok" }
 ```
 
 ### GET `/health`
@@ -100,7 +100,7 @@
 ```json
 {
   "version": "2026-03-05-v1",
-  "content": "[autoLV 서비스 이용약관] ...",
+  "content": "[필지랩 서비스 이용약관] ...",
   "accepted_at": "2026-03-05T06:31:15+00:00"
 }
 ```
@@ -113,7 +113,7 @@
 ```json
 {
   "version": "2026-03-05-v1",
-  "content": "[autoLV 서비스 이용약관] ...",
+  "content": "[필지랩 서비스 이용약관] ...",
   "accepted_at": null
 }
 ```

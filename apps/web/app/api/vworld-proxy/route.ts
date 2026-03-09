@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       cache: "no-store",
       headers: {
         Accept: "application/json",
-        "User-Agent": "autoLV-web-proxy/1.0",
+        "User-Agent": "piljilab-web-proxy/1.0",
         Referer: vworldReferer,
         Connection: "close",
       },

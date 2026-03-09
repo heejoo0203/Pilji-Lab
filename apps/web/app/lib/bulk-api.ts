@@ -56,7 +56,7 @@ export async function downloadBulkTemplate(): Promise<void> {
     throw new Error(extractError(payload, "양식 파일 다운로드에 실패했습니다."));
   }
   const blob = await res.blob();
-  triggerDownload(blob, "autolv_bulk_template.xlsx");
+  triggerDownload(blob, "piljilab_bulk_template.xlsx");
 }
 
 export async function downloadBulkResult(jobId: string, fileName: string): Promise<void> {

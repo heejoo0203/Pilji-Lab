@@ -300,139 +300,195 @@ function SearchPageClient() {
   };
 
   return (
-    <>
-      {!isLoggedIn ? (
-        <section className="hero-lite">
-          <h1>정확한 토지 가치 데이터, 더 쉽게</h1>
-          <p>비로그인 상태에서도 개별 주소 조회를 바로 사용할 수 있습니다.</p>
-        </section>
-      ) : null}
-
-      <section className="panel">
-        <h2>주소 선택</h2>
-        <div className="tab-row">
-          <button className={`tab-chip ${searchTab === "지번" ? "on" : ""}`} onClick={() => setSearchTab("지번")}>
-            지번 검색
-          </button>
-          <button className={`tab-chip ${searchTab === "도로명" ? "on" : ""}`} onClick={() => setSearchTab("도로명")}>
-            도로명 검색
-          </button>
+    <div className="lookup-shell">
+      <section className="lookup-hero hero-grid">
+        <div>
+          <span className="eyebrow">Single Parcel Lookup</span>
+          <h1 className="hero-title">지번과 도로명을 구조화해서, 필요한 필지를 빠르게 찾습니다.</h1>
+          <p className="hero-copy">
+            필지랩 개별조회는 주소 선택 과정을 표준화해 검색 오류를 줄이고, 연도별 공시지가 이력과 토지소재지 정보를
+            한 화면에 정리합니다.
+          </p>
         </div>
+        <div className="hero-stat-grid">
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">조회 방식</div>
+            <div className="hero-stat-value small">지번 · 도로명 동시 지원</div>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">출력 형태</div>
+            <div className="hero-stat-value small">연도별 개별공시지가 표</div>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">로그인 없이</div>
+            <div className="hero-stat-value small">개별조회 즉시 사용 가능</div>
+          </div>
+          <div className="hero-stat-card">
+            <div className="hero-stat-label">로그인 시</div>
+            <div className="hero-stat-value small">조회기록 자동 저장 및 복원</div>
+          </div>
+        </div>
+      </section>
 
-        <div className="selector-grid">
-          <SelectBox title="시/도 선택" value={sido} items={sidoList} onChange={onSelectSido} />
-          <SelectBox title="시/군/구 선택" value={sigungu} items={sigunguList} onChange={onSelectSigungu} />
-
-          {searchTab === "지번" ? (
-            <SelectBox title="읍/면/동 선택" value={dong} items={dongList} onChange={setDong} />
-          ) : (
-            <div>
-              <label className="field-label">도로명 선택</label>
-              <div className="road-select-combo">
-                <select
-                  className="scroll-select initials"
-                  size={8}
-                  value={roadInitial}
-                  disabled={initialLoading || availableInitials.length === 0}
-                  onChange={(e) => {
-                    setRoadInitial(e.target.value as "" | (typeof ROAD_INITIALS)[number]);
-                    setRoadName("");
-                  }}
-                >
-                  <option value="">선택</option>
-                  {initialLoading ? <option value="" disabled>불러오는 중...</option> : null}
-                  {!initialLoading && availableInitials.length === 0 ? (
-                    <option value="" disabled>
-                      사용 가능한 자음 없음
-                    </option>
-                  ) : null}
-                  {availableInitials.map((ch) => (
-                    <option key={ch} value={ch}>
-                      {ch}
-                    </option>
-                  ))}
-                </select>
-                <select className="scroll-select roads" size={8} value={roadName} onChange={(e) => setRoadName(e.target.value)}>
-                  {roadLoading ? <option value="">불러오는 중...</option> : null}
-                  {roadList.map((road) => (
-                    <option key={road} value={road}>
-                      {road}
-                    </option>
-                  ))}
-                </select>
-              </div>
+      <div className="lookup-grid">
+        <div>
+          <section className="panel">
+            <div className="section-head">
+              <span className="eyebrow">Lookup Form</span>
+              <h2>주소 선택</h2>
+              <p className="hint">행정구역과 지번/도로명 구조에 맞춰 입력하면 가장 안정적으로 조회됩니다.</p>
             </div>
-          )}
+
+            <div className="tab-row">
+              <button className={`tab-chip ${searchTab === "지번" ? "on" : ""}`} onClick={() => setSearchTab("지번")}>
+                지번 검색
+              </button>
+              <button className={`tab-chip ${searchTab === "도로명" ? "on" : ""}`} onClick={() => setSearchTab("도로명")}>
+                도로명 검색
+              </button>
+            </div>
+
+            <div className="selector-grid">
+              <SelectBox title="시/도 선택" value={sido} items={sidoList} onChange={onSelectSido} />
+              <SelectBox title="시/군/구 선택" value={sigungu} items={sigunguList} onChange={onSelectSigungu} />
+
+              {searchTab === "지번" ? (
+                <SelectBox title="읍/면/동 선택" value={dong} items={dongList} onChange={setDong} />
+              ) : (
+                <div>
+                  <label className="field-label">도로명 선택</label>
+                  <div className="road-select-combo">
+                    <select
+                      className="scroll-select initials"
+                      size={8}
+                      value={roadInitial}
+                      disabled={initialLoading || availableInitials.length === 0}
+                      onChange={(e) => {
+                        setRoadInitial(e.target.value as "" | (typeof ROAD_INITIALS)[number]);
+                        setRoadName("");
+                      }}
+                    >
+                      <option value="">선택</option>
+                      {initialLoading ? <option value="" disabled>불러오는 중...</option> : null}
+                      {!initialLoading && availableInitials.length === 0 ? (
+                        <option value="" disabled>
+                          사용 가능한 자음 없음
+                        </option>
+                      ) : null}
+                      {availableInitials.map((ch) => (
+                        <option key={ch} value={ch}>
+                          {ch}
+                        </option>
+                      ))}
+                    </select>
+                    <select className="scroll-select roads" size={8} value={roadName} onChange={(e) => setRoadName(e.target.value)}>
+                      {roadLoading ? <option value="">불러오는 중...</option> : null}
+                      {roadList.map((road) => (
+                        <option key={road} value={road}>
+                          {road}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {searchTab === "지번" ? (
+              <div className="inline-form jibun-inline-form">
+                <span className="inline-label">지번 입력</span>
+                <select
+                  className="mini-select jibun-kind-select"
+                  value={sanType}
+                  onChange={(e) => setSanType(e.target.value as (typeof SAN_OPTIONS)[number])}
+                >
+                  {SAN_OPTIONS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+                <input className="mini-input jibun-num-input" value={mainNo} onChange={(e) => setMainNo(e.target.value)} placeholder="본번" />
+                <span className="inline-sep">-</span>
+                <input className="mini-input jibun-num-input" value={subNo} onChange={(e) => setSubNo(e.target.value)} placeholder="부번" />
+              </div>
+            ) : (
+              <div className="inline-form">
+                <span className="inline-label">건물번호</span>
+                <input className="mini-input" value={buildingMainNo} onChange={(e) => setBuildingMainNo(e.target.value)} placeholder="본번" />
+                <span className="inline-sep">-</span>
+                <input className="mini-input" value={buildingSubNo} onChange={(e) => setBuildingSubNo(e.target.value)} placeholder="부번" />
+              </div>
+            )}
+
+            <button className="btn-primary full" onClick={() => void runSearch()} disabled={searching}>
+              {searching ? "검색 중..." : "검색"}
+            </button>
+            <p className="hint">{message}</p>
+          </section>
+
+          <section className="panel">
+            <div className="section-head">
+              <span className="eyebrow">Result</span>
+              <h2>검색 결과</h2>
+            </div>
+            {rows.length === 0 ? (
+              <p className="hint">{showNoResult ? "검색 결과가 없습니다." : "주소를 입력하여 조회해주세요."}</p>
+            ) : (
+              <table className="data-table mobile-card-table">
+                <thead>
+                  <tr>
+                    <th>가격기준년도</th>
+                    <th>토지소재지</th>
+                    <th>지번</th>
+                    <th>개별공시지가</th>
+                    <th>기준일자</th>
+                    <th>공시일자</th>
+                    <th>비고</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, idx) => (
+                    <tr key={`${row.토지소재지}-${idx}`}>
+                      <td data-label="가격기준년도">{row.기준년도}</td>
+                      <td data-label="토지소재지">{row.토지소재지}</td>
+                      <td data-label="지번">{row.지번}</td>
+                      <td data-label="개별공시지가">{row.개별공시지가}</td>
+                      <td data-label="기준일자">{row.기준일자}</td>
+                      <td data-label="공시일자">{row.공시일자}</td>
+                      <td data-label="비고">{row.비고}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
         </div>
 
-        {searchTab === "지번" ? (
-          <div className="inline-form inline-form-center jibun-inline-form">
-            <span className="inline-label">지번 입력</span>
-            <select
-              className="mini-select jibun-kind-select"
-              value={sanType}
-              onChange={(e) => setSanType(e.target.value as (typeof SAN_OPTIONS)[number])}
-            >
-              {SAN_OPTIONS.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-            <input className="mini-input jibun-num-input" value={mainNo} onChange={(e) => setMainNo(e.target.value)} placeholder="본번" />
-            <span className="inline-sep">-</span>
-            <input className="mini-input jibun-num-input" value={subNo} onChange={(e) => setSubNo(e.target.value)} placeholder="부번" />
-          </div>
-        ) : (
-          <div className="inline-form">
-            <span className="inline-label">건물번호</span>
-            <input className="mini-input" value={buildingMainNo} onChange={(e) => setBuildingMainNo(e.target.value)} placeholder="본번" />
-            <span>-</span>
-            <input className="mini-input" value={buildingSubNo} onChange={(e) => setBuildingSubNo(e.target.value)} placeholder="부번" />
-          </div>
-        )}
-
-        <button className="btn-primary full" onClick={() => void runSearch()} disabled={searching}>
-          {searching ? "검색 중..." : "검색"}
-        </button>
-        <p className="hint">{message}</p>
-      </section>
-
-      <section className="panel">
-        <h2>검색 결과</h2>
-        {rows.length === 0 ? (
-          <p className="hint">{showNoResult ? "검색 결과가 없습니다." : "주소를 입력하여 조회해주세요."}</p>
-        ) : (
-          <table className="data-table mobile-card-table">
-            <thead>
-              <tr>
-                <th>가격기준년도</th>
-                <th>토지소재지</th>
-                <th>지번</th>
-                <th>개별공시지가</th>
-                <th>기준일자</th>
-                <th>공시일자</th>
-                <th>비고</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => (
-                <tr key={`${row.토지소재지}-${idx}`}>
-                  <td data-label="가격기준년도">{row.기준년도}</td>
-                  <td data-label="토지소재지">{row.토지소재지}</td>
-                  <td data-label="지번">{row.지번}</td>
-                  <td data-label="개별공시지가">{row.개별공시지가}</td>
-                  <td data-label="기준일자">{row.기준일자}</td>
-                  <td data-label="공시일자">{row.공시일자}</td>
-                  <td data-label="비고">{row.비고}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-    </>
+        <aside className="lookup-side">
+          <article className="lookup-side-card">
+            <h3>입력 가이드</h3>
+            <p className="hint">
+              지번 조회는 행정구역과 본번·부번을, 도로명 조회는 시군구·도로명·건물번호를 정확히 맞추는 것이 핵심입니다.
+            </p>
+          </article>
+          <article className="lookup-side-card">
+            <h3>결과 활용</h3>
+            <ul className="feature-list">
+              <li>연도별 공시지가 추이 확인</li>
+              <li>로그인 시 조회기록 저장 및 재열람</li>
+              <li>지도조회·구역 분석의 기준 필지로 활용</li>
+            </ul>
+          </article>
+          {!isLoggedIn ? (
+            <article className="lookup-side-card">
+              <h3>로그인 후 확장 기능</h3>
+              <p className="hint">지도조회, 구역 분석, 파일조회, 조회기록 관리까지 이어서 사용할 수 있습니다.</p>
+            </article>
+          ) : null}
+        </aside>
+      </div>
+    </div>
   );
 }
 

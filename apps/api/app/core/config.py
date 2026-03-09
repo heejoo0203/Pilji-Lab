@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     # Load defaults from .env.example first, then let .env override.
     model_config = SettingsConfigDict(env_file=(".env.example", ".env"), env_file_encoding="utf-8")
 
-    app_name: str = "autoLV API"
+    app_name: str = "필지랩 API"
     cors_origins: str = Field(
         default="http://127.0.0.1:3000,http://localhost:3000",
         alias="CORS_ORIGINS",
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     vworld_retry_count: int = Field(default=2, alias="VWORLD_RETRY_COUNT")
     vworld_retry_backoff_seconds: float = Field(default=0.35, alias="VWORLD_RETRY_BACKOFF_SECONDS")
     vworld_user_agent: str = Field(
-        default="autoLV/1.0 (+https://auto-lv.vercel.app)",
+        default="PiljiLab/1.0 (+https://auto-lv.vercel.app)",
         alias="VWORLD_USER_AGENT",
     )
     vworld_referer: str = Field(default="https://auto-lv.vercel.app", alias="VWORLD_REFERER")
