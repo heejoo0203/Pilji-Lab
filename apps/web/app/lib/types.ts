@@ -267,3 +267,25 @@ export type MapZoneDeleteResponse = {
   zone_id: string;
   deleted: boolean;
 };
+
+export type MapZoneComparisonParcelDelta = {
+  pnu: string;
+  jibun_address: string;
+};
+
+export type MapZoneComparisonSummary = {
+  target_zone_id: string;
+  target_zone_name: string;
+  target_updated_at: string;
+  added_parcel_count: number;
+  removed_parcel_count: number;
+  added_parcels: MapZoneComparisonParcelDelta[];
+  removed_parcels: MapZoneComparisonParcelDelta[];
+  parcel_delta: number;
+  assessed_total_price_delta: number;
+  geometry_assessed_total_price_delta: number;
+  average_unit_price_delta: number | null;
+  boundary_parcel_delta: number;
+  anomaly_parcel_delta: number;
+  building_count_delta: number;
+};

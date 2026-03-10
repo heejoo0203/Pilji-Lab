@@ -9,18 +9,22 @@ export function ZoneLibraryPanel({
   items,
   activeZoneId,
   busyZoneId,
+  compareZoneId,
   onSelect,
   onRename,
   onDelete,
+  onCompare,
 }: {
   open: boolean;
   loading: boolean;
   items: MapZoneListItem[];
   activeZoneId: string | null;
   busyZoneId: string | null;
+  compareZoneId: string | null;
   onSelect: (item: MapZoneListItem) => void;
   onRename: (item: MapZoneListItem) => void;
   onDelete: (item: MapZoneListItem) => void;
+  onCompare: (item: MapZoneListItem) => void;
 }) {
   return (
     <div className={`map-zone-library ${open ? "open" : ""}`}>
@@ -54,6 +58,14 @@ export function ZoneLibraryPanel({
                   <span>총합 {formatNumber(item.assessed_total_price)}원</span>
                 </div>
                 <div className="map-zone-library-actions" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    type="button"
+                    className={`map-zone-mini-btn ${compareZoneId === item.zone_id ? "active" : ""}`}
+                    disabled={busy}
+                    onClick={() => onCompare(item)}
+                  >
+                    비교
+                  </button>
                   <button type="button" className="map-zone-mini-btn" disabled={busy} onClick={() => onRename(item)}>
                     이름 수정
                   </button>

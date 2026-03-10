@@ -4,10 +4,10 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useAuth } from "@/app/components/auth-provider";
-import { MapRowsTable } from "@/app/components/map/map-rows-table";
-import { MetricCard } from "@/app/components/map/metric-card";
+import { MapFloatingWorkbench } from "@/app/components/map/map-floating-workbench";
+import { MapResultDrawer } from "@/app/components/map/map-result-drawer";
+import { MapWorkspaceToolbar } from "@/app/components/map/map-workspace-toolbar";
 import { ZoneLibraryPanel } from "@/app/components/map/zone-library-panel";
-import { ZoneResultTable } from "@/app/components/map/zone-result-table";
 import { createSearchHistoryLog, fetchSearchHistoryDetail } from "@/app/lib/history-api";
 import {
   analyzeMapZone,
@@ -25,10 +25,10 @@ import {
   searchMapLookupByAddress,
   updateMapZoneParcelDecisions,
 } from "@/app/lib/map-api";
+import { buildZoneComparisonSummary } from "@/app/lib/zone-comparison";
 import {
   buildZonePointMarker,
   formatArea,
-  formatDateTime,
   formatNumber,
   formatRate,
   buildZoneParcelOverlayStyle,
@@ -40,6 +40,7 @@ import type {
   LandResultRow,
   MapLandDetailsResponse,
   MapLookupResponse,
+  MapZoneComparisonSummary,
   MapZoneCoordinate,
   MapZoneListItem,
   MapZoneResponse,
@@ -72,6 +73,13 @@ const DEFAULT_CENTER_LAT = Number(process.env.NEXT_PUBLIC_MAP_CENTER_LAT ?? "37.
 const DEFAULT_CENTER_LNG = Number(process.env.NEXT_PUBLIC_MAP_CENTER_LNG ?? "126.9779451");
 const MAX_ZONE_POINTS = 100;
 const ZONE_LIST_PAGE_SIZE = 50;
+const QUICK_LOOKUP_OPTIONS = [
+  { label: "서울시청", query: "서울특별시 중구 세종대로 110", caption: "중구 세종대로 110" },
+  { label: "성수동", query: "서울특별시 성동구 성수동1가", caption: "성동구 성수동1가" },
+  { label: "압구정", query: "서울특별시 강남구 압구정동", caption: "강남구 압구정동" },
+  { label: "마포", query: "서울특별시 마포구 공덕동", caption: "마포구 공덕동" },
+  { label: "판교", query: "경기도 성남시 분당구 백현동", caption: "성남 판교권" },
+] as const;
 
 export default function MapPage() {
   return (
@@ -118,12 +126,19 @@ function MapPageClient() {
   const [zoneLibraryOpen, setZoneLibraryOpen] = useState(true);
   const [mapPanelCollapsed, setMapPanelCollapsed] = useState(false);
   const [zoneItemBusyId, setZoneItemBusyId] = useState<string | null>(null);
+  const [compareZoneId, setCompareZoneId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDistrictOverlay, setShowDistrictOverlay] = useState(false);
+  const [detailPanelOpen, setDetailPanelOpen] = useState(false);
   const [addressQuery, setAddressQuery] = useState("");
   const [zoneName, setZoneName] = useState("내 구역");
   const [zonePoints, setZonePoints] = useState<MapZoneCoordinate[]>([]);
+  const [zoneOverlapThreshold, setZoneOverlapThreshold] = useState(0.9);
   const [selectedZonePnuSet, setSelectedZonePnuSet] = useState<Set<string>>(new Set());
+  const [deferredZonePnuSet, setDeferredZonePnuSet] = useState<Set<string>>(new Set());
+  const [activeZoneParcelPnu, setActiveZoneParcelPnu] = useState<string | null>(null);
+  const [zoneComparison, setZoneComparison] = useState<MapZoneComparisonSummary | null>(null);
+  const [zoneComparisonLoading, setZoneComparisonLoading] = useState(false);
   const [zoneResult, setZoneResult] = useState<MapZoneResponse | null>(null);
   const [zoneBaseline, setZoneBaseline] = useState<MapZoneResponse | null>(null);
   const [zoneList, setZoneList] = useState<MapZoneListItem[]>([]);
@@ -151,6 +166,18 @@ function MapPageClient() {
       boundary: zoneResult.parcels.filter((item) => item.inclusion_mode === "boundary_candidate").length,
     };
   }, [zoneResult]);
+  const searchIntentLabel = useMemo(() => getSearchIntentLabel(addressQuery), [addressQuery]);
+  const quickSearchOptions = useMemo(() => {
+    const keyword = addressQuery.trim();
+    if (!keyword) return QUICK_LOOKUP_OPTIONS;
+    const lowered = keyword.toLowerCase();
+    return QUICK_LOOKUP_OPTIONS.filter(
+      (item) =>
+        item.label.includes(keyword) ||
+        item.query.includes(keyword) ||
+        item.caption.toLowerCase().includes(lowered),
+    ).slice(0, 5);
+  }, [addressQuery]);
 
   const handleModeChange = (nextMode: "basic" | "zone") => {
     if (nextMode === "zone" && !isLoggedIn) {
@@ -368,6 +395,12 @@ function MapPageClient() {
   }, [mapReady, result]);
 
   useEffect(() => {
+    if ((viewMode === "basic" && result) || (viewMode === "zone" && zoneResult)) {
+      setDetailPanelOpen(true);
+    }
+  }, [viewMode, result, zoneResult]);
+
+  useEffect(() => {
     if (!mapReady) return;
     if (viewMode !== "zone") {
       clearZoneShapes();
@@ -383,7 +416,7 @@ function MapPageClient() {
       return;
     }
     redrawZoneParcelHighlights();
-  }, [mapReady, viewMode, zoneResult]);
+  }, [mapReady, viewMode, zoneResult, activeZoneParcelPnu]);
 
   useEffect(() => {
     if (!mapReady || !activeZoneId || !zoneResult?.coordinates?.length) return;
@@ -456,15 +489,30 @@ function MapPageClient() {
     }
     const keyword = addressQuery.trim();
     if (keyword.length < 2) {
-      setMessage("주소를 2자 이상 입력해 주세요.");
+      setMessage("주소, 지번 또는 PNU를 2자 이상 입력해 주세요.");
+      return;
+    }
+
+    await runKeywordSearch(keyword, { persistHistory: true });
+  };
+
+  const runKeywordSearch = async (
+    keyword: string,
+    options: { persistHistory?: boolean; customMessage?: string } = {},
+  ) => {
+    const normalized = keyword.trim();
+    if (normalized.length < 2) {
+      setMessage("주소, 지번 또는 PNU를 2자 이상 입력해 주세요.");
       return;
     }
 
     setAddressLoading(true);
-    setMessage("주소를 좌표로 변환해 조회 중입니다...");
+    setMessage(isPnuQuery(normalized) ? "PNU를 기준으로 필지를 조회 중입니다..." : "주소를 좌표로 변환해 조회 중입니다...");
     try {
-      const payload = await searchMapLookupByAddress(keyword);
-      applyLookupResult(payload, { persistHistory: true });
+      const payload = isPnuQuery(normalized)
+        ? await fetchMapLookupByPnu(normalized)
+        : await searchMapLookupByAddress(normalized);
+      applyLookupResult(payload, { persistHistory: options.persistHistory ?? true, customMessage: options.customMessage });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "주소 기반 지도 조회에 실패했습니다.");
     } finally {
@@ -472,10 +520,19 @@ function MapPageClient() {
     }
   };
 
+  const runQuickSearch = async (query: string) => {
+    setAddressQuery(query);
+    await runKeywordSearch(query, { persistHistory: true });
+  };
+
   const appendZonePoint = (lat: number, lng: number) => {
     setZoneResult(null);
     setActiveZoneId(null);
     setSelectedZonePnuSet(new Set());
+    setDeferredZonePnuSet(new Set());
+    setActiveZoneParcelPnu(null);
+    setZoneComparison(null);
+    setCompareZoneId(null);
     setZonePoints((prev) => {
       if (prev.length >= MAX_ZONE_POINTS) {
         setMessage(`구역 좌표는 최대 ${MAX_ZONE_POINTS}개까지 추가할 수 있습니다.`);
@@ -491,6 +548,10 @@ function MapPageClient() {
     setZoneResult(null);
     setActiveZoneId(null);
     setSelectedZonePnuSet(new Set());
+    setDeferredZonePnuSet(new Set());
+    setActiveZoneParcelPnu(null);
+    setZoneComparison(null);
+    setCompareZoneId(null);
     setZonePoints((prev) => {
       if (prev.length === 0) return prev;
       const next = prev.slice(0, -1);
@@ -508,7 +569,12 @@ function MapPageClient() {
     setZoneResult(null);
     setActiveZoneId(null);
     setSelectedZonePnuSet(new Set());
+    setDeferredZonePnuSet(new Set());
+    setActiveZoneParcelPnu(null);
+    setZoneComparison(null);
+    setCompareZoneId(null);
     clearZoneShapes();
+    clearZoneParcelHighlights();
     setMessage("구역 좌표를 초기화했습니다.");
   };
 
@@ -526,7 +592,7 @@ function MapPageClient() {
     setZoneLoading(true);
     setMessage("구역 내 필지와 공시지가를 분석 중입니다...");
     try {
-      const payload = await analyzeMapZone(name, zonePoints);
+      const payload = await analyzeMapZone(name, zonePoints, zoneOverlapThreshold);
       applyZoneResult(payload, {
         customMessage: `구역 분석 완료: 확정 포함 ${payload.summary.parcel_count}건, 경계 후보 ${payload.summary.boundary_parcel_count}건입니다. 저장하려면 '구역 저장'을 눌러 주세요.`,
         fitToZone: false,
@@ -558,6 +624,7 @@ function MapPageClient() {
         zonePoints,
         getZoneExcludedPnuList(zoneResult),
         getZoneIncludedOverridePnuList(zoneResult),
+        zoneOverlapThreshold,
       );
       applyZoneResult(payload, {
         customMessage: "구역을 저장했습니다. 저장 구역 목록에서 다시 불러올 수 있습니다.",
@@ -660,6 +727,25 @@ function MapPageClient() {
       setMessage(error instanceof Error ? error.message : "구역 분석 결과를 불러오지 못했습니다.");
     } finally {
       setZoneItemBusyId(null);
+    }
+  };
+
+  const compareZoneItem = async (item: MapZoneListItem) => {
+    if (!zoneResult) {
+      setMessage("먼저 현재 구역 분석 결과를 준비해 주세요.");
+      return;
+    }
+    setCompareZoneId(item.zone_id);
+    setZoneComparisonLoading(true);
+    try {
+      const payload = await fetchMapZone(item.zone_id);
+      setZoneComparison(buildZoneComparisonSummary(zoneResult, payload));
+      setMessage(`"${item.zone_name}" 저장본과 현재 결과를 비교했습니다.`);
+    } catch (error) {
+      setZoneComparison(null);
+      setMessage(error instanceof Error ? error.message : "구역 비교에 실패했습니다.");
+    } finally {
+      setZoneComparisonLoading(false);
     }
   };
 
@@ -787,6 +873,7 @@ function MapPageClient() {
   ) => {
     setViewMode("zone");
     setZoneResult(payload);
+    setZoneOverlapThreshold(payload.summary.overlap_threshold || 0.9);
     if (!options?.preserveBaseline) {
       setZoneBaseline(payload);
     }
@@ -794,6 +881,10 @@ function MapPageClient() {
     setZoneName(payload.summary.zone_name);
     setZonePoints(payload.coordinates);
     setSelectedZonePnuSet(new Set());
+    setDeferredZonePnuSet(new Set());
+    setActiveZoneParcelPnu(payload.parcels.find((item) => item.inclusion_mode === "boundary_candidate")?.pnu ?? payload.parcels[0]?.pnu ?? null);
+    setZoneComparison(null);
+    setCompareZoneId(null);
     if (options?.openLibrary) {
       setZoneLibraryOpen(true);
     }
@@ -859,6 +950,43 @@ function MapPageClient() {
       return item;
     });
     return rebuildZonePreview(payload, nextParcels);
+  };
+
+  const focusZoneParcel = (parcel: MapZoneResponse["parcels"][number]) => {
+    setActiveZoneParcelPnu(parcel.pnu);
+    setDetailPanelOpen(true);
+    if (parcel.lat !== null && parcel.lng !== null) {
+      setMarker(parcel.lat, parcel.lng);
+      moveMapCenter(parcel.lat, parcel.lng);
+    }
+  };
+
+  const toggleDeferredZoneParcel = (pnu: string) => {
+    setDeferredZonePnuSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(pnu)) next.delete(pnu);
+      else next.add(pnu);
+      return next;
+    });
+  };
+
+  const applyDirectZoneDecision = (pnu: string, mode: "include" | "exclude") => {
+    if (!zoneResult) return;
+    const next =
+      mode === "include"
+        ? applyLocalZoneDecision(zoneResult, { includePnuSet: new Set([pnu]), decisionOrigin: "user" })
+        : applyLocalZoneDecision(zoneResult, { excludePnuSet: new Set([pnu]) });
+    setDeferredZonePnuSet((prev) => {
+      const nextSet = new Set(prev);
+      nextSet.delete(pnu);
+      return nextSet;
+    });
+    applyZoneResult(next, {
+      customMessage: mode === "include" ? "검토 큐에서 필지를 포함 확정했습니다." : "검토 큐에서 필지를 제외 확정했습니다.",
+      fitToZone: false,
+      preserveBaseline: true,
+    });
+    setActiveZoneParcelPnu(pnu);
   };
 
   const openZoneParcelInBasicView = async (parcel: MapZoneResponse["parcels"][number]) => {
@@ -941,6 +1069,16 @@ function MapPageClient() {
     setShowDistrictOverlay((prev) => !prev);
   };
 
+  const resetMapView = () => {
+    const kakaoMaps = window.kakao?.maps;
+    const map = mapRef.current;
+    if (!kakaoMaps?.LatLng || !map) return;
+    const center = new kakaoMaps.LatLng(DEFAULT_CENTER_LAT, DEFAULT_CENTER_LNG);
+    map.setCenter?.(center);
+    map.setLevel?.(3);
+    setMessage("기본 시야로 되돌렸습니다.");
+  };
+
   const moveToCurrentLocation = () => {
     if (!navigator.geolocation) {
       setMessage("브라우저가 현재 위치 조회를 지원하지 않습니다.");
@@ -1019,6 +1157,23 @@ function MapPageClient() {
       return null;
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const copyResultSummary = async () => {
+    if (!result) return;
+    const text = [
+      result.jibun_address || result.address_summary,
+      result.road_address,
+      `PNU ${result.pnu}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage("필지 주소와 PNU를 복사했습니다.");
+    } catch {
+      setMessage("클립보드 복사에 실패했습니다.");
     }
   };
 
@@ -1130,12 +1285,12 @@ function MapPageClient() {
         const polygon = new kakaoMaps.Polygon({
           map,
           path,
-          strokeWeight: 2,
+          strokeWeight: parcel.pnu === activeZoneParcelPnu ? 4 : 2,
           strokeColor: overlayStyle.strokeColor,
-          strokeOpacity: overlayStyle.strokeOpacity,
+          strokeOpacity: parcel.pnu === activeZoneParcelPnu ? 1 : overlayStyle.strokeOpacity,
           strokeStyle: "solid",
           fillColor: overlayStyle.fillColor,
-          fillOpacity: overlayStyle.fillOpacity,
+          fillOpacity: parcel.pnu === activeZoneParcelPnu ? Math.min(overlayStyle.fillOpacity + 0.12, 0.68) : overlayStyle.fillOpacity,
         });
         polygon.setMap?.(map);
         zoneParcelPolygonsRef.current.push(polygon);
@@ -1166,302 +1321,145 @@ function MapPageClient() {
   };
 
   return (
-    <section className={`map-workbench ${mapPanelCollapsed ? "panel-collapsed" : ""}`}>
-      <aside className={`lab-surface map-side-panel ${mapPanelCollapsed ? "collapsed" : ""}`}>
-        <div className="map-panel-head">
-          <div>
-            <span className="lab-eyebrow">Map Analysis</span>
-            <h2>지도 분석</h2>
-            <p>{viewMode === "basic" ? "주소 검색 또는 지도 클릭으로 필지를 찾고 결과를 리포트처럼 읽습니다." : "구역을 그리면 포함 필지와 사업성 지표를 한 번에 집계합니다."}</p>
-          </div>
-          <button type="button" className="lab-btn lab-btn-tertiary compact" onClick={() => setMapPanelCollapsed((prev) => !prev)}>
-            {mapPanelCollapsed ? "펼치기" : "접기"}
-          </button>
+    <section className="map-workspace-shell">
+      <div ref={mapFrameRef} className={`map-workspace-frame ${isFullscreen ? "fullscreen" : ""}`}>
+        <div ref={mapContainerRef} className="map-canvas map-workspace-canvas" />
+
+        <div className="map-overlay map-overlay-left">
+          <MapFloatingWorkbench
+            collapsed={mapPanelCollapsed}
+            onToggleCollapse={() => setMapPanelCollapsed((prev) => !prev)}
+            viewMode={viewMode}
+            onModeChange={handleModeChange}
+            isLoggedIn={isLoggedIn}
+            addressQuery={addressQuery}
+            onAddressQueryChange={setAddressQuery}
+            onSearchSubmit={() => void runAddressSearch()}
+            addressLoading={addressLoading}
+            searchIntentLabel={searchIntentLabel}
+            quickSearchOptions={quickSearchOptions}
+            onQuickSearch={(query) => void runQuickSearch(query)}
+            result={result}
+            zoneName={zoneName}
+            onZoneNameChange={setZoneName}
+            zonePointCount={zonePoints.length}
+            overlapThreshold={zoneOverlapThreshold}
+            onOverlapThresholdChange={setZoneOverlapThreshold}
+            zoneLoading={zoneLoading}
+            onZoneAnalyze={() => void runZoneAnalyze()}
+            onUndoZonePoint={undoZonePoint}
+            onClearZonePoints={clearZonePoints}
+            zoneLibraryOpen={zoneLibraryOpen}
+            onToggleZoneLibrary={() => setZoneLibraryOpen((prev) => !prev)}
+            zoneLibrary={
+              isLoggedIn ? (
+                <ZoneLibraryPanel
+                  open={zoneLibraryOpen}
+                  loading={zoneListLoading}
+                  items={zoneList}
+                  activeZoneId={activeZoneId}
+                  busyZoneId={zoneItemBusyId}
+                  compareZoneId={compareZoneId}
+                  onSelect={(item) => void loadZoneById(item.zone_id)}
+                  onCompare={(item) => void compareZoneItem(item)}
+                  onRename={(item) => void renameZoneItem(item)}
+                  onDelete={(item) => void deleteZoneItem(item)}
+                />
+              ) : null
+            }
+          />
         </div>
 
-        {!mapPanelCollapsed ? (
-          <>
-            <div className="search-tab-switch map-mode-switch">
-              <button type="button" className={`lab-toggle ${viewMode === "basic" ? "active" : ""}`} onClick={() => handleModeChange("basic")}>
-                기본 조회
-              </button>
-              <button type="button" className={`lab-toggle ${viewMode === "zone" ? "active" : ""}`} onClick={() => handleModeChange("zone")}>
-                구역 조회
-              </button>
-            </div>
+        <div className="map-overlay map-overlay-right-top">
+          <MapWorkspaceToolbar
+            showDistrictOverlay={showDistrictOverlay}
+            onToggleDistrictOverlay={toggleDistrictOverlay}
+            onMoveToCurrentLocation={moveToCurrentLocation}
+            onResetView={resetMapView}
+            onToggleFullscreen={() => void toggleFullscreen()}
+            isFullscreen={isFullscreen}
+            viewMode={viewMode}
+            zoneLibraryOpen={zoneLibraryOpen}
+            onToggleZoneLibrary={() => setZoneLibraryOpen((prev) => !prev)}
+            onClearZonePoints={clearZonePoints}
+          />
+        </div>
 
-            {!isLoggedIn ? <p className="map-inline-note">비로그인 상태에서는 기본조회만 사용할 수 있습니다.</p> : null}
-
-            {viewMode === "basic" ? (
-              <>
-                <form
-                  className="map-panel-search"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void runAddressSearch();
-                  }}
-                >
-                  <input
-                    className="lab-input"
-                    value={addressQuery}
-                    onChange={(event) => setAddressQuery(event.target.value)}
-                    placeholder="주소 또는 지번 입력"
-                  />
-                  <button type="submit" className="lab-btn lab-btn-primary" disabled={addressLoading || loading || !mapReady}>
-                    {addressLoading ? "조회 중..." : "주소 조회"}
-                  </button>
-                </form>
-
-                <div className="map-panel-summary">
-                  {result ? (
-                    <div className="map-side-metrics">
-                      <MetricCard label="현재 공시지가" value={formatNumber(result.price_current)} />
-                      <MetricCard label="전년 대비" value={formatRate(result.growth_rate)} />
-                      <MetricCard label="면적(㎡)" value={formatArea(result.area)} />
-                      <MetricCard label="추정 총 가치" value={formatNumber(result.estimated_total_price)} />
-                    </div>
-                  ) : (
-                    <div className="lab-empty-state compact">
-                      <strong>아직 선택한 필지가 없습니다.</strong>
-                      <p>지도를 클릭하거나 주소를 입력해 분석을 시작해 주세요.</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="map-panel-actions">
-                  <button type="button" className="lab-btn lab-btn-secondary" onClick={() => void loadYearlyRows()} disabled={!result?.pnu || yearlyLoading}>
-                    {yearlyLoading ? "불러오는 중..." : "연도별 이력"}
-                  </button>
-                  <button type="button" className="lab-btn lab-btn-tertiary" onClick={() => void downloadCsv()} disabled={!result?.pnu}>
-                    CSV
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                {isLoggedIn ? (
-                  <>
-                    <div className="map-panel-zone-form">
-                      <input className="lab-input" value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="구역 이름" />
-                      <div className="map-panel-zone-points">선택 좌표 {zonePoints.length}개</div>
-                    </div>
-
-                    <div className="map-panel-actions stacked">
-                      <button type="button" className="lab-btn lab-btn-primary" onClick={() => void runZoneAnalyze()} disabled={zoneLoading || zonePoints.length < 3}>
-                        {zoneLoading ? "분석 중..." : "구역 분석"}
-                      </button>
-                      <button type="button" className="lab-btn lab-btn-secondary" onClick={undoZonePoint} disabled={zonePoints.length === 0 || zoneLoading}>
-                        되돌리기
-                      </button>
-                      <button type="button" className="lab-btn lab-btn-tertiary" onClick={clearZonePoints} disabled={zoneLoading}>
-                        초기화
-                      </button>
-                    </div>
-
-                    <div className="map-panel-summary">
-                      {zoneResult ? (
-                        <div className="map-side-metrics">
-                          <MetricCard label="구역 내 필지 수" value={formatNumber(zoneResult.summary.parcel_count)} />
-                          <MetricCard label="경계 필지 수" value={formatNumber(zoneResult.summary.boundary_parcel_count)} />
-                          <MetricCard label="필지 기준 총가치" value={formatNumber(zoneResult.summary.assessed_total_price)} />
-                          <MetricCard label="구역 내부 총가치" value={formatNumber(zoneResult.summary.geometry_assessed_total_price)} />
-                          <MetricCard label="노후도(%)" value={formatNumber(zoneResult.summary.aged_building_ratio)} />
-                          <MetricCard label="평균 용적률" value={formatNumber(zoneResult.summary.average_floor_area_ratio)} />
-                        </div>
-                      ) : (
-                        <div className="lab-empty-state compact">
-                          <strong>아직 구역 분석 결과가 없습니다.</strong>
-                          <p>지도에서 경계를 그리고 분석을 실행하면 요약 지표가 여기에 표시됩니다.</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="map-zone-ai-toggle">
-                      <button
-                        type="button"
-                        className={`lab-filter-chip ${aiPreviewEnabled ? "active" : ""}`}
-                        onClick={() => void runZoneApplyAi()}
-                        disabled={!zoneResult || zoneExcludeLoading || aiApplicableCount === 0}
-                      >
-                        AI 추천 적용함 {zoneResult ? `(${aiApplicableCount})` : ""}
-                      </button>
-                      <button
-                        type="button"
-                        className={`lab-filter-chip ${!aiPreviewEnabled ? "active" : ""}`}
-                        onClick={runZoneDisableAi}
-                        disabled={!zoneResult || zoneExcludeLoading || !aiPreviewEnabled}
-                      >
-                        AI 추천 안 함
-                      </button>
-                    </div>
-
-                    <div className="map-panel-actions map-zone-selection-row">
-                      <button
-                        type="button"
-                        className="lab-btn lab-btn-secondary"
-                        onClick={() => void runZoneInclude("user")}
-                        disabled={!zoneResult || selectedZonePnuSet.size === 0 || zoneExcludeLoading}
-                      >
-                        {zoneExcludeLoading ? "처리 중..." : `선택 포함 (${selectedZonePnuSet.size})`}
-                      </button>
-                    </div>
-                    <div className="map-panel-actions map-zone-action-row map-zone-save-row">
-                      {!zoneResult?.summary.is_saved ? (
-                        <button type="button" className="lab-btn lab-btn-secondary" onClick={() => void runZoneSave()} disabled={!zoneResult || zoneSaveLoading}>
-                          {zoneSaveLoading ? "저장 중..." : "구역 저장"}
-                        </button>
-                      ) : (
-                        <button type="button" className="lab-btn lab-btn-secondary" onClick={() => void runZonePersistChanges()} disabled={!zoneResult || zoneSaveLoading}>
-                          {zoneSaveLoading ? "저장 중..." : "변경 저장"}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="lab-btn lab-btn-danger"
-                        onClick={() => void runZoneExclude()}
-                        disabled={!zoneResult || selectedZonePnuSet.size === 0 || zoneExcludeLoading}
-                      >
-                        {zoneExcludeLoading ? "처리 중..." : `선택 삭제 (${selectedZonePnuSet.size})`}
-                      </button>
-                      <button type="button" className="lab-btn lab-btn-tertiary" onClick={() => void runZoneDownload()} disabled={!zoneResult?.summary.is_saved}>
-                        CSV
-                      </button>
-                    </div>
-                    <div className="map-save-state">{zoneResult?.summary.is_saved ? "저장 구역" : "미저장 미리보기"}</div>
-
-                    {zoneLibraryOpen ? (
-                      <ZoneLibraryPanel
-                        open={zoneLibraryOpen}
-                        loading={zoneListLoading}
-                        items={zoneList}
-                        activeZoneId={activeZoneId}
-                        busyZoneId={zoneItemBusyId}
-                        onSelect={(item) => void loadZoneById(item.zone_id)}
-                        onRename={(item) => void renameZoneItem(item)}
-                        onDelete={(item) => void deleteZoneItem(item)}
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="lab-empty-state compact">
-                    <strong>구역 조회는 로그인 후 사용할 수 있습니다.</strong>
-                    <p>비로그인 상태에서는 기본조회만 사용할 수 있으며, 구역 분석·저장·CSV 기능은 회원 전용입니다.</p>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        ) : null}
-      </aside>
-
-      <div className="map-stage-column">
-        <div ref={mapFrameRef} className={`lab-surface map-frame ${isFullscreen ? "fullscreen" : ""}`}>
-          <div className="map-floating-controls">
-            <button type="button" className={`lab-float-btn ${showDistrictOverlay ? "active" : ""}`} onClick={toggleDistrictOverlay}>
-              지적도
-            </button>
-            <button type="button" className="lab-float-btn" onClick={moveToCurrentLocation}>
-              현재 위치
-            </button>
-            <button type="button" className="lab-float-btn" onClick={() => void toggleFullscreen()}>
-              {isFullscreen ? "전체화면 종료" : "전체화면"}
-            </button>
-            {viewMode === "zone" ? (
-              <>
-                <button type="button" className={`lab-float-btn ${zoneLibraryOpen ? "active" : ""}`} onClick={() => setZoneLibraryOpen((prev) => !prev)}>
-                  저장 구역
-                </button>
-                <button type="button" className="lab-float-btn danger" onClick={clearZonePoints}>
-                  구역 초기화
-                </button>
-              </>
-            ) : null}
-          </div>
-          {viewMode === "zone" && zoneResult ? (
-            <div className="map-legend">
+        {viewMode === "zone" && zoneResult ? (
+          <div className="map-overlay map-overlay-left-bottom">
+            <div className="map-legend workspace">
               <span><i className="legend-swatch included" />확정 포함 {formatNumber(zoneResult.summary.parcel_count)}</span>
               <span><i className="legend-swatch ai" />AI 추천 {formatNumber(zoneResultCounts.ai)}</span>
               <span><i className="legend-swatch boundary" />경계 검토 {formatNumber(zoneResultCounts.boundary)}</span>
               <span><i className="legend-swatch anomaly" />이상치 검토 {formatNumber(zoneResultCounts.anomaly)}</span>
             </div>
-          ) : null}
-          <div ref={mapContainerRef} className="map-canvas" />
+          </div>
+        ) : null}
+
+        <div className="map-overlay map-overlay-status">
+          <div className={`map-status-pill ${loading || addressLoading || zoneLoading ? "busy" : ""}`}>
+            <strong>{viewMode === "basic" ? "필지 조회" : "구역 분석"}</strong>
+            <span>{loading || addressLoading || zoneLoading ? "데이터를 불러오는 중입니다." : message}</span>
+          </div>
         </div>
 
-        <section className={`lab-surface map-bottom-sheet ${viewMode === "zone" ? "zone-mode" : ""}`}>
-          <div className="map-bottom-head">
-            <div>
-              <span className="lab-eyebrow">Result Sheet</span>
-              <h3>{viewMode === "basic" ? "필지 분석 결과" : "구역 분석 결과"}</h3>
-            </div>
-            <div className="map-bottom-actions">
-              {viewMode === "basic" && result ? (
-                <>
-                  <button type="button" className="lab-btn lab-btn-secondary compact" onClick={() => void toggleLandDetails()} disabled={detailLoading}>
-                    {detailLoading ? "불러오는 중..." : showLandDetails ? "토지특성 닫기" : "토지특성 열기"}
-                  </button>
-                  <button type="button" className="lab-btn lab-btn-tertiary compact" onClick={() => void downloadCsv()}>
-                    CSV 내보내기
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </div>
-          <p className="map-status-text">{loading ? "조회 중입니다..." : message}</p>
-
-          {viewMode === "basic" ? (
-            !result ? (
-              <div className="lab-empty-state">
-                <strong>아직 조회한 결과가 없습니다.</strong>
-                <p>지도를 클릭하거나 좌측 패널에서 주소를 입력해 필지를 분석해 주세요.</p>
-              </div>
-            ) : (
-              <>
-                <div className="map-metrics">
-                  <MetricCard label="지번" value={result.jibun_address || result.address_summary || "-"} />
-                  <MetricCard label="도로명 주소" value={result.road_address || "-"} />
-                  <MetricCard label="현재 공시지가(원/㎡)" value={formatNumber(result.price_current)} />
-                  <MetricCard label="전년도 공시지가(원/㎡)" value={formatNumber(result.price_previous)} />
-                  <MetricCard label="증감률(%)" value={formatRate(result.growth_rate)} />
-                  <MetricCard label="면적(㎡)" value={formatArea(result.area)} />
-                  <MetricCard label="면적×단가(원)" value={formatNumber(result.estimated_total_price)} />
-                  <MetricCard label={`인근 평균(${result.nearby_radius_m}m)`} value={formatNumber(result.nearby_avg_price)} />
-                </div>
-
-                <div className="map-inline-note">
-                  좌표 {result.lat.toFixed(6)}, {result.lng.toFixed(6)} · 데이터 소스 {result.cache_hit ? "DB 캐시" : "실시간"}
-                </div>
-
-                {showLandDetails && landDetails ? (
-                  <div className="map-metrics map-detail-grid">
-                    <MetricCard label="상세 기준연도" value={landDetails.stdr_year || "-"} />
-                    <MetricCard label="지목" value={landDetails.land_category_name || "-"} />
-                    <MetricCard label="용도지역명" value={landDetails.purpose_area_name || "-"} />
-                    <MetricCard label="용도지구명" value={landDetails.purpose_district_name || "-"} />
-                    <MetricCard label="토지면적(㎡)" value={formatArea(landDetails.area)} />
-                  </div>
-                ) : null}
-
-                <MapRowsTable rows={result.rows} cacheHit={result.cache_hit} loading={yearlyLoading} onLoadRows={() => void loadYearlyRows()} />
-              </>
-            )
-          ) : (
-            <ZoneResultTable
-              zoneResult={zoneResult}
-              selectedPnuSet={selectedZonePnuSet}
-              onSelect={(pnu, checked) => toggleZoneSelection(pnu, checked)}
-              onLocate={(lat, lng) => {
-                if (lat === null || lng === null) return;
-                setMarker(lat, lng);
-                moveMapCenter(lat, lng);
-              }}
-              onOpenBasic={(parcel) => void openZoneParcelInBasicView(parcel)}
-            />
-          )}
-        </section>
+        <MapResultDrawer
+          open={detailPanelOpen}
+          onToggleOpen={() => setDetailPanelOpen((prev) => !prev)}
+          viewMode={viewMode}
+          message={message}
+          result={result}
+          landDetails={landDetails}
+          showLandDetails={showLandDetails}
+          detailLoading={detailLoading}
+          yearlyLoading={yearlyLoading}
+          onToggleLandDetails={() => void toggleLandDetails()}
+          onDownloadCsv={() => void downloadCsv()}
+          onLoadRows={() => void loadYearlyRows()}
+          onCopyResult={() => void copyResultSummary()}
+          zoneResult={zoneResult}
+          aiApplicableCount={aiApplicableCount}
+          aiPreviewEnabled={aiPreviewEnabled}
+          zoneExcludeLoading={zoneExcludeLoading}
+          zoneSaveLoading={zoneSaveLoading}
+          zoneComparison={zoneComparison}
+          zoneComparisonLoading={zoneComparisonLoading}
+          activeZoneParcelPnu={activeZoneParcelPnu}
+          deferredZonePnuSet={deferredZonePnuSet}
+          onApplyAi={() => void runZoneApplyAi()}
+          onDisableAi={runZoneDisableAi}
+          onIncludeSelected={() => void runZoneInclude("user")}
+          onExcludeSelected={() => void runZoneExclude()}
+          onSaveZone={() => void runZoneSave()}
+          onPersistZone={() => void runZonePersistChanges()}
+          onDownloadZoneCsv={() => void runZoneDownload()}
+          onClearComparison={() => {
+            setZoneComparison(null);
+            setCompareZoneId(null);
+          }}
+          onFocusZoneParcel={focusZoneParcel}
+          onIncludeZoneParcel={(pnu) => applyDirectZoneDecision(pnu, "include")}
+          onExcludeZoneParcel={(pnu) => applyDirectZoneDecision(pnu, "exclude")}
+          onToggleDeferZoneParcel={toggleDeferredZoneParcel}
+          selectedPnuSet={selectedZonePnuSet}
+          onSelectZoneParcel={(selectedPnu, checked) => toggleZoneSelection(selectedPnu, checked)}
+          onOpenZoneParcelInBasic={(parcel) => void openZoneParcelInBasicView(parcel)}
+        />
       </div>
     </section>
   );
+}
+
+function isPnuQuery(value: string): boolean {
+  return /^\d{19}$/.test(value.trim());
+}
+
+function getSearchIntentLabel(value: string): string {
+  const keyword = value.trim();
+  if (!keyword) return "주소·지번·PNU 자동 인식";
+  if (isPnuQuery(keyword)) return "PNU 직접 조회";
+  if (/\d/.test(keyword)) return "지번 또는 도로명 주소 조회";
+  return "주소 키워드 조회";
 }
 
 async function loadKakaoMapSdk(appKey: string): Promise<void> {

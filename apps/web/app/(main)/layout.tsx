@@ -25,6 +25,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const router = useRouter();
   const { user, openAuth, logout } = useAuth();
+  const isMapRoute = pathname.startsWith("/map");
 
   const isLoggedIn = Boolean(user);
   const activeKey =
@@ -52,8 +53,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="app-shell">
-      <header className="lab-header">
-        <BrandLogo href="/features" size="md" withTagline />
+      <header className={`lab-header ${isMapRoute ? "lab-header-slim" : ""}`}>
+        <BrandLogo href="/features" size={isMapRoute ? "sm" : "md"} withTagline={!isMapRoute} />
 
         <nav className="lab-header-nav" aria-label="주요 메뉴">
           {NAV_ITEMS.map((item) =>
@@ -99,36 +100,40 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
 
-      <main className={`content-wrap ${pathname === "/map" ? "content-wrap-bleed" : ""}`}>{children}</main>
+      <main className={`content-wrap ${pathname === "/map" ? "content-wrap-bleed content-wrap-map" : ""}`}>{children}</main>
 
-      <footer className="site-footer">
-        <Link href="/privacy">개인정보처리방침</Link>
-        <span>·</span>
-        <Link href="/account-deletion">계정 삭제</Link>
-        <span>·</span>
-        <Link href="/features">서비스 소개</Link>
-      </footer>
+      {isMapRoute ? null : (
+        <footer className="site-footer">
+          <Link href="/privacy">개인정보처리방침</Link>
+          <span>·</span>
+          <Link href="/account-deletion">계정 삭제</Link>
+          <span>·</span>
+          <Link href="/features">서비스 소개</Link>
+        </footer>
+      )}
 
-      <nav className="mobile-dock" aria-label="모바일 바로가기">
-        <Link href="/features" className={activeKey === "features" ? "active" : ""}>
-          소개
-        </Link>
-        <Link href="/search" className={activeKey === "search" ? "active" : ""}>
-          개별조회
-        </Link>
-        <Link href="/map" className={activeKey === "map" ? "active" : ""}>
-          지도분석
-        </Link>
-        {isLoggedIn ? (
-          <Link href="/history" className={activeKey === "history" ? "active" : ""}>
-            내역
+      {isMapRoute ? null : (
+        <nav className="mobile-dock" aria-label="모바일 바로가기">
+          <Link href="/features" className={activeKey === "features" ? "active" : ""}>
+            소개
           </Link>
-        ) : (
-          <button type="button" onClick={() => openAuth("login")}>
-            로그인
-          </button>
-        )}
-      </nav>
+          <Link href="/search" className={activeKey === "search" ? "active" : ""}>
+            개별조회
+          </Link>
+          <Link href="/map" className={activeKey === "map" ? "active" : ""}>
+            지도분석
+          </Link>
+          {isLoggedIn ? (
+            <Link href="/history" className={activeKey === "history" ? "active" : ""}>
+              내역
+            </Link>
+          ) : (
+            <button type="button" onClick={() => openAuth("login")}>
+              로그인
+            </button>
+          )}
+        </nav>
+      )}
     </div>
   );
 }

@@ -76,13 +76,15 @@ export function ZoneResultTable({
   zoneResult,
   selectedPnuSet,
   onSelect,
-  onLocate,
+  activePnu,
+  onFocus,
   onOpenBasic,
 }: {
   zoneResult: MapZoneResponse | null;
   selectedPnuSet: Set<string>;
   onSelect: (pnu: string, checked: boolean) => void;
-  onLocate: (lat: number | null, lng: number | null) => void;
+  activePnu: string | null;
+  onFocus: (parcel: MapZoneResponse["parcels"][number]) => void;
   onOpenBasic: (parcel: MapZoneResponse["parcels"][number]) => void;
 }) {
   const [expandedPnuSet, setExpandedPnuSet] = useState<Set<string>>(new Set());
@@ -194,7 +196,7 @@ export function ZoneResultTable({
               const expanded = expandedPnuSet.has(row.pnu);
               return (
                 <Fragment key={row.pnu}>
-                  <tr className={!row.included ? "excluded" : ""} onClick={() => onLocate(row.lat, row.lng)}>
+                  <tr className={`${!row.included ? "excluded" : ""} ${activePnu === row.pnu ? "active" : ""}`} onClick={() => onFocus(row)}>
                     <td className="center" data-label="선택" onClick={(event) => event.stopPropagation()}>
                       <input type="checkbox" checked={selected} onChange={(event) => onSelect(row.pnu, event.target.checked)} aria-label={`필지 선택 ${row.pnu}`} />
                     </td>

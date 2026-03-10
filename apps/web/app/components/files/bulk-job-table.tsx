@@ -68,6 +68,9 @@ export function BulkJobTable(props: Props) {
                   <td data-label="파일명">{job.file_name}</td>
                   <td data-label="상태">
                     <span className={`status-badge ${job.status}`}>{toStatusLabel(job.status)}</span>
+                    {job.error_message ? (
+                      <p className="bulk-job-diagnosis">{diagnoseBulkError(job.error_message)}</p>
+                    ) : null}
                   </td>
                   <td data-label="행 수">
                     {job.processed_rows.toLocaleString()} / {job.total_rows.toLocaleString()}
@@ -156,4 +159,27 @@ function formatDateTime(value: string): string {
   const hour12 = hour % 12 || 12;
 
   return `${year}.${month}.${day}(${weekday}) ${hour12}:${minute} ${ampm}`;
+}
+
+function diagnoseBulkError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("duplicate") || normalized.includes("중복")) {
+    return "중복 주소 또는 중복 행이 포함된 작업입니다.";
+  }
+  if (normalized.includes("address") || normalized.includes("주소")) {
+    return "주소 형식 또는 필수 주소 요소 누락을 확인해 주세요.";
+  }
+  if (normalized.includes("pnu")) {
+    return "PNU 변환 단계에서 해석되지 않은 행이 많습니다.";
+  }
+  if (normalized.includes("timeout") || normalized.includes("timed out")) {
+    return "외부 API 응답 지연으로 작업이 중단됐습니다.";
+  }
+  if (normalized.includes("vworld") || normalized.includes("api")) {
+    return "외부 연동 응답 오류입니다. 잠시 후 다시 시도해 주세요.";
+  }
+  if (normalized.includes("xlsx") || normalized.includes("csv") || normalized.includes("excel")) {
+    return "파일 형식 또는 읽기 가능한 시트 구조를 확인해 주세요.";
+  }
+  return "실패 원인을 재검토해야 하는 작업입니다.";
 }
