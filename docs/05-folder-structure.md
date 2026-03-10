@@ -1,4 +1,4 @@
-# 폴더 구조 (v3.0 준비)
+# 폴더 구조 (v3 안정화)
 
 ## 1. 현재 구조
 ```text
@@ -102,11 +102,18 @@ autoLV/
           auth-modal.tsx
           auth-provider.tsx
           profile-action-modal.tsx
+          ui/
+            loading-indicator.tsx
           map/
+            map-floating-workbench.tsx
+            map-result-drawer.tsx
             map-rows-table.tsx
+            map-workspace-toolbar.tsx
             metric-card.tsx
+            zone-comparison-card.tsx
             zone-library-panel.tsx
             zone-result-table.tsx
+            zone-review-queue.tsx
           files/
             bulk-upload-panel.tsx
             bulk-job-table.tsx
@@ -117,6 +124,7 @@ autoLV/
           history-api.ts
           map-api.ts
           map-view-utils.ts
+          zone-comparison.ts
           types.ts
         (main)/
           layout.tsx
@@ -181,6 +189,7 @@ autoLV/
 - `apps/api`: FastAPI 서버/비즈니스 로직/DB 마이그레이션
 - `apps/api/scripts/run_bulk_worker.py`: Redis 기반 파일조회 전용 워커
 - `apps/web`: Next.js 웹 서비스(개별조회/지도조회/파일조회/조회기록/마이페이지)
+- `apps/web/app/components/map/*`: map-first workspace UI 조합 계층
 - `apps/mobile`: Capacitor 기반 Android 래퍼 앱
 - `infra/vworld-proxy`: VWorld 고정 IP 프록시 서비스
 - `docs`: 요구사항/아키텍처/API/배포/릴리스 노트
@@ -198,7 +207,8 @@ autoLV/
 - Bulk 처리 로직은 `services/bulk/*`로 세분화해 유지보수성 확보
 - bulk 실행 경로는 `job_service.py -> queue.py -> run_bulk_worker.py -> processor.py`로 분리해 API 프로세스와 작업 프로세스를 분리
 - Web은 페이지/컴포넌트/API 클라이언트(`lib/*`)를 분리
-- 지도조회/조회기록은 페이지 단의 UI와 API 호출 모듈을 분리
+- 지도조회는 `page.tsx`가 상태 오케스트레이션을 담당하고, 실제 UI는 `map-floating-workbench`, `map-result-drawer`, `map-workspace-toolbar`, `zone-review-queue`, `zone-comparison-card` 등으로 분리한다.
+- 조회기록은 페이지 단 UI와 API 호출 모듈을 분리
 - 저장 구역/조회기록 삭제처럼 목록성 기능은 페이지 UI와 API 클라이언트 분리 원칙 유지
 - 구역 사업성 분석은 `map_zone/*`와 `building_register_service.py`로 분리해 공간 계산과 건축물대장 연동 책임을 분리
 - 건축물대장 원본 응답은 `building_register_caches`에 캐시하고, 구역 응답은 실시간 집계만 수행
@@ -208,7 +218,17 @@ autoLV/
 - 향후 raw / normalized / serving 계층 도입 시 서비스/모델도 같은 단위로 분리
 - legacy 디렉터리(`backend`, `frontend`, `crawler`)는 각 폴더의 `README.md`로 현재 비운영 상태를 명시
 
-## 5. 향후 확장 권장
+## 5. 현재 정리 우선순위
+- 기능 추가보다 먼저 정리해야 할 큰 파일/영역은 아래와 같다.
+  - `apps/api/app/services/map_service.py`
+  - `apps/api/app/services/map_zone_service.py`
+  - `apps/web/app/(main)/map/page.tsx`
+  - `apps/web/app/(main)/search/page.tsx`
+- 원칙:
+  - 동작을 깨지 않는 범위에서 책임을 더 잘게 분리
+  - UI 오버레이/워크플로우/도메인 계산을 섞지 않기
+  - 모바일 대응 로직을 컴포넌트 레벨에서 일관되게 유지
+## 6. 향후 확장 권장
 - 지도 폴리곤 분석 고도화 시 AI/보정 계층 추가 권장:
   - `app/services/map_zone_snap_service.py`
   - `app/services/map_zone_ml_service.py`

@@ -1,4 +1,13 @@
-# 데이터 저장 구조 (v3.0 준비)
+# 데이터 저장 구조 (v3 안정화)
+
+## 0. 저장 구조 방향
+- 현재 DB 구조는 단순 조회 결과 보관보다, `작업 재현성`과 `정확도 추적`을 확보하는 쪽으로 확장 중이다.
+- 저장 계층의 목적은 다음 4가지다.
+  1. 결과 재열람
+  2. 저장/비교
+  3. 정확도 설명과 감사 추적
+  4. 향후 프로젝트/워크스페이스 확장 준비
+- 장기적으로는 `raw -> normalized -> serving` 3계층을 더 명확히 분리해야 한다.
 
 ## 1. DB 런타임 구성
 - 로컬 개발 기본 DB: SQLite (`apps/api/autolv.db`)
@@ -120,6 +129,7 @@
 - `zone_analyses`는 `/map/zones/analyze` 호출 시 자동 생성되지 않는다.
 - 사용자가 `구역 저장`을 눌러 `/map/zones`를 호출했을 때만 영속 저장된다.
 - `zone_area_sqm`는 드로잉 폴리곤 면적이 아니라, 저장 시점 기준 포함 필지 `area_sqm` 합계다.
+- 이 테이블은 향후 프로젝트/워크스페이스 계층의 스냅샷 기본 단위로 확장될 수 있다.
 
 ### 2.7 zone_analysis_parcels
 - `id` (String(36), PK)
@@ -167,6 +177,7 @@
 - `ai_recommendation`은 휴리스틱 AI의 권고 상태(`included | uncertain | excluded`)다.
 - `selection_origin`은 최종 포함/제외 결정의 출처(`rule | user | ai`)다.
 - `anomaly_level`은 `none | review | critical` 중 하나로 해석한다.
+- 이 테이블이 사실상 구역 검토 워크플로우의 핵심 작업 아이템 단위다.
 
 ### 2.8 building_register_caches
 - `id` (String(36), PK)
@@ -228,7 +239,7 @@
 5. 관리자 계정 시드 필요 시 `scripts/reset_db_and_seed_admin.py` 실행
 
 ## 6. 예정 스키마 확장 (v3.x)
-정확도 추적과 AI 보조 계층을 위해 다음 확장을 권장한다.
+정확도 추적과 작업 시스템 고도화를 위해 다음 확장을 권장한다.
 
 ### 6.1 zone_building_metrics (예정)
 - `id` (String(36), PK)
