@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { useAuth } from "@/app/components/auth-provider";
 import { BrandLogo } from "@/app/components/brand-logo";
@@ -28,6 +29,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const isMapRoute = pathname.startsWith("/map");
 
   const isLoggedIn = Boolean(user);
+  const visibleNavItems = isMapRoute ? NAV_ITEMS.filter((item) => item.key !== "files") : NAV_ITEMS;
+  useEffect(() => {
+    document.body.classList.toggle("map-route-active", isMapRoute);
+    return () => {
+      document.body.classList.remove("map-route-active");
+    };
+  }, [isMapRoute]);
+
   const activeKey =
     pathname === "/"
       ? "features"
@@ -52,12 +61,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <div className="app-shell">
-      <header className={`lab-header ${isMapRoute ? "lab-header-slim" : ""}`}>
+    <div className={`app-shell ${isMapRoute ? "app-shell-map" : ""}`}>
+      <header className={`lab-header ${isMapRoute ? "lab-header-slim lab-header-floating" : ""}`}>
         <BrandLogo href="/features" size={isMapRoute ? "sm" : "md"} withTagline={!isMapRoute} />
 
         <nav className="lab-header-nav" aria-label="주요 메뉴">
-          {NAV_ITEMS.map((item) =>
+          {visibleNavItems.map((item) =>
             item.requiresAuth && !isLoggedIn ? (
               <button
                 key={item.key}

@@ -33,6 +33,10 @@ body {
   font-family: var(--font-body), "Noto Sans KR", sans-serif;
 }
 
+body.map-route-active {
+  overflow: hidden;
+}
+
 body::before {
   content: "";
   position: fixed;
@@ -53,6 +57,11 @@ body > div[style*="position: fixed"] {
   position: relative;
   min-height: 100vh;
   padding: 24px;
+}
+
+.app-shell-map {
+  padding: 0;
+  min-height: 100svh;
 }
 
 .content-wrap {
@@ -2685,23 +2694,33 @@ body::before {
 }
 
 .content-wrap-map {
-  width: min(100vw - 28px, 1720px);
-  padding-top: 12px;
+  width: 100vw;
+  padding-top: 0;
   padding-bottom: 0;
 }
 
 .lab-header-slim {
-  width: min(100vw - 28px, 1720px);
-  padding: 10px 14px;
+  width: min(calc(100vw - 28px), 1180px);
+  padding: 9px 14px;
   gap: 14px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.76);
   box-shadow: 0 12px 30px rgba(16, 35, 63, 0.08);
 }
 
+.lab-header-floating {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 40;
+  margin: 0;
+  transform: translateX(-50%);
+  backdrop-filter: blur(22px);
+}
+
 .lab-header-slim .lab-nav-link {
-  padding: 8px 12px;
-  font-size: 14px;
+  padding: 7px 11px;
+  font-size: 13px;
 }
 
 .lab-header-slim .lab-header-nav,
@@ -2711,8 +2730,8 @@ body::before {
 
 .map-workspace-shell {
   position: relative;
-  height: calc(100vh - 108px);
-  min-height: 760px;
+  height: 100svh;
+  min-height: 100svh;
 }
 
 .map-workspace-frame {
@@ -2720,12 +2739,12 @@ body::before {
   height: 100%;
   overflow: hidden;
   padding: 0;
-  border: 1px solid rgba(18, 59, 102, 0.08);
-  border-radius: 28px;
+  border: none;
+  border-radius: 0;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.65), transparent 25%),
     linear-gradient(180deg, rgba(216, 228, 237, 0.96), rgba(228, 236, 242, 0.96));
-  box-shadow: 0 24px 56px rgba(16, 35, 63, 0.1);
+  box-shadow: none;
 }
 
 .map-workspace-frame.fullscreen {
@@ -2745,12 +2764,12 @@ body::before {
 }
 
 .map-overlay-left {
-  top: 18px;
+  top: 88px;
   left: 18px;
 }
 
 .map-overlay-right-top {
-  top: 18px;
+  top: 88px;
   right: 18px;
 }
 
@@ -2983,6 +3002,7 @@ body::before {
 .map-toolbar-cluster {
   display: grid;
   gap: 10px;
+  justify-items: end;
 }
 
 .map-toolbar-group {
@@ -3060,7 +3080,7 @@ body::before {
 
 .map-result-drawer {
   position: absolute;
-  top: 18px;
+  top: 88px;
   right: 18px;
   bottom: 18px;
   z-index: 13;
@@ -3087,10 +3107,10 @@ body::before {
 }
 
 .map-result-drawer-handle {
-  align-self: flex-start;
+  align-self: center;
   min-height: 52px;
   padding: 0 16px;
-  margin-top: 18px;
+  margin-top: 0;
   border: 1px solid rgba(255, 255, 255, 0.84);
   border-radius: 16px 0 0 16px;
   background: rgba(255, 255, 255, 0.92);
@@ -3642,14 +3662,22 @@ body::before {
 }
 
 @media (max-width: 860px) {
+  body.map-route-active {
+    overflow: auto;
+  }
+
   .content-wrap-map {
     width: 100%;
     padding-top: 10px;
   }
 
   .lab-header-slim {
-    width: 100%;
+    width: calc(100vw - 24px);
     padding: 10px 12px;
+  }
+
+  .lab-header-floating {
+    top: 10px;
   }
 
   .lab-header-slim .lab-header-nav {
@@ -3657,12 +3685,12 @@ body::before {
   }
 
   .map-workspace-shell {
-    height: calc(100vh - 96px);
-    min-height: calc(100vh - 96px);
+    height: 100svh;
+    min-height: 100svh;
   }
 
   .map-overlay-left {
-    top: 12px;
+    top: 72px;
     left: 12px;
     right: 12px;
   }
@@ -3727,6 +3755,7 @@ body::before {
 
   .map-result-drawer-handle {
     width: 100%;
+    align-self: stretch;
     margin-top: 0;
     border-radius: 18px 18px 0 0;
   }
