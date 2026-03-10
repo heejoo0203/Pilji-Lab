@@ -84,7 +84,7 @@ export function buildZoneAiReport(parcels: MapZoneResponse["parcels"]): string |
   const includeCount = parcels.filter((item) => item.ai_recommendation === "included").length;
   const uncertainCount = parcels.filter((item) => item.ai_recommendation === "uncertain").length;
   const anomalyCount = parcels.filter((item) => item.anomaly_level && item.anomaly_level !== "none").length;
-  return `AI가 ${parcels.length}개 필지를 검토했습니다. 추천 포함 ${includeCount}건, 경계 검토 ${uncertainCount}건, 이상치 검토 ${anomalyCount}건입니다.`;
+  return `AI가 ${parcels.length}개 필지를 검토했습니다. AI 포함 권고 ${includeCount}건, 직접 검토 ${uncertainCount}건, 값 점검 ${anomalyCount}건입니다.`;
 }
 
 export function buildZoneParcelOverlayStyle(parcel: MapZoneResponse["parcels"][number]) {

@@ -27,29 +27,35 @@ function formatPercent(value: number | null | undefined): string {
 function buildDecisionExplanation(parcel: ParcelItem): string {
   const overlapText = `${Math.round((parcel.overlap_ratio ?? 0) * 100)}%`;
   if (parcel.anomaly_level && parcel.anomaly_level !== "none") {
-    return `이 필지는 이상치 검토 대상으로 분류되었습니다. 겹침률은 ${overlapText}이며, 원문값과 주변 패턴 차이를 함께 확인해야 합니다.`;
+    return `값이 주변 패턴과 달라 직접 확인이 필요한 필지입니다. 현재 겹침률은 ${overlapText}입니다.`;
   }
   if (
     (parcel.included && parcel.ai_recommendation === "excluded") ||
     (!parcel.included && parcel.ai_recommendation === "included")
   ) {
-    return `규칙 판정과 AI 보조 판정이 다릅니다. 현재 규칙 기준은 ${parcel.included ? "포함" : "제외"}이고, AI는 ${parcel.ai_recommendation === "included" ? "포함" : "제외"}을 추천합니다.`;
+    return `규칙 판정과 AI 의견이 다릅니다. 현재 계산은 ${parcel.included ? "반영" : "미반영"} 상태이고, AI는 ${parcel.ai_recommendation === "included" ? "포함" : "제외"} 쪽을 권고합니다.`;
   }
   if (parcel.inclusion_mode === "boundary_candidate") {
-    return `경계 필지입니다. 겹침률 ${overlapText}, 중심점 ${parcel.centroid_in ? "포함" : "미포함"} 상태라 수동 검토가 필요합니다.`;
+    return `구역 경계에 걸친 필지입니다. 겹침률 ${overlapText}, 중심점 ${parcel.centroid_in ? "포함" : "미포함"} 기준으로 자동 확정하지 않았습니다.`;
   }
   if (parcel.ai_recommendation === "uncertain") {
-    return `AI가 확정하지 못한 필지입니다. 겹침률 ${overlapText}와 주변 연속성을 함께 보는 것이 좋습니다.`;
+    return `AI가 확신하지 못한 필지입니다. 겹침률 ${overlapText}와 주변 필지 흐름을 함께 확인해 주세요.`;
   }
   if (parcel.included) {
-    return `현재는 포함으로 반영됩니다. 겹침률 ${overlapText}와 규칙 점수가 기준 이상입니다.`;
+    return `현재 계산에 반영된 필지입니다. 겹침률 ${overlapText}와 규칙 점수가 기준 이상입니다.`;
   }
-  return `현재는 제외 상태입니다. 겹침률 ${overlapText}가 낮거나 보조 판정 신뢰도가 충분하지 않습니다.`;
+  return `현재 계산에서 제외된 필지입니다. 겹침률 ${overlapText}가 낮거나 직접 제외 처리된 상태입니다.`;
 }
 
 function buildReviewItems(parcels: ParcelItem[], deferredPnuSet: Set<string>): ReviewItem[] {
   return parcels
     .map((parcel) => {
+      const isUserResolved =
+        parcel.selection_origin === "user" &&
+        (parcel.inclusion_mode === "user_excluded" || parcel.inclusion_mode === "user_included");
+      if (isUserResolved) {
+        return null;
+      }
       if (deferredPnuSet.has(parcel.pnu)) {
         return {
           parcel,
@@ -111,10 +117,10 @@ function buildReviewItems(parcels: ParcelItem[], deferredPnuSet: Set<string>): R
 }
 
 function getBucketLabel(bucket: ReviewBucket): string {
-  if (bucket === "anomaly") return "이상치";
-  if (bucket === "conflict") return "충돌";
-  if (bucket === "boundary") return "경계";
-  if (bucket === "ai") return "AI";
+  if (bucket === "anomaly") return "값 검토";
+  if (bucket === "conflict") return "판정 충돌";
+  if (bucket === "boundary") return "경계 후보";
+  if (bucket === "ai") return "AI 검토";
   return "보류";
 }
 
@@ -235,8 +241,8 @@ export function ZoneReviewQueue({
               <p>{item.reason}</p>
               <div className="zone-review-card-meta">
                 <span>겹침률 {formatPercent(item.parcel.overlap_ratio * 100)}</span>
-                <span>신뢰도 {formatPercent(item.parcel.confidence_score * 100)}</span>
-                <span>AI {item.parcel.ai_recommendation || "-"}</span>
+                <span>규칙 점수 {formatPercent(item.parcel.confidence_score * 100)}</span>
+                <span>AI {item.parcel.ai_recommendation === "included" ? "포함 권고" : item.parcel.ai_recommendation === "excluded" ? "제외 권고" : item.parcel.ai_recommendation === "uncertain" ? "판단 유보" : "-"}</span>
               </div>
               <div className="zone-review-card-actions" onClick={(event) => event.stopPropagation()}>
                 <button type="button" className="lab-chip active" onClick={() => onIncludeParcel(item.parcel.pnu)}>
@@ -281,8 +287,8 @@ export function ZoneReviewQueue({
             <summary>판정 근거 상세</summary>
             <div className="map-result-metric-grid compact">
               <div className="map-zone-detail-item">
-                <span>포함 방식</span>
-                <strong>{activeParcel.inclusion_mode}</strong>
+                <span>현재 상태</span>
+                <strong>{activeParcel.included ? "계산 반영" : activeParcel.inclusion_mode === "user_excluded" ? "사용자 제외" : "미반영"}</strong>
               </div>
               <div className="map-zone-detail-item">
                 <span>겹침률</span>
@@ -297,25 +303,31 @@ export function ZoneReviewQueue({
                 <strong>{activeParcel.centroid_in ? "예" : "아니오"}</strong>
               </div>
               <div className="map-zone-detail-item">
-                <span>규칙 신뢰도</span>
+                <span>규칙 점수</span>
                 <strong>{formatPercent(activeParcel.confidence_score * 100)}</strong>
               </div>
               <div className="map-zone-detail-item">
-                <span>AI 추천</span>
+                <span>AI 의견</span>
                 <strong>
-                  {activeParcel.ai_recommendation || "-"}
+                  {activeParcel.ai_recommendation === "included"
+                    ? "포함 권고"
+                    : activeParcel.ai_recommendation === "excluded"
+                      ? "제외 권고"
+                      : activeParcel.ai_recommendation === "uncertain"
+                        ? "판단 유보"
+                        : "-"}
                   {activeParcel.ai_confidence_score !== null
                     ? ` · ${formatPercent(activeParcel.ai_confidence_score * 100)}`
                     : ""}
                 </strong>
               </div>
               <div className="map-zone-detail-item">
-                <span>이상치 수준</span>
-                <strong>{activeParcel.anomaly_level || "none"}</strong>
+                <span>값 점검 상태</span>
+                <strong>{activeParcel.anomaly_level && activeParcel.anomaly_level !== "none" ? "직접 확인 필요" : "문제 없음"}</strong>
               </div>
               <div className="map-zone-detail-item">
                 <span>판정 출처</span>
-                <strong>{activeParcel.selection_origin}</strong>
+                <strong>{activeParcel.selection_origin === "ai" ? "AI 반영" : activeParcel.selection_origin === "user" ? "사용자 확정" : "규칙 계산"}</strong>
               </div>
             </div>
           </details>

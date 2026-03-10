@@ -25,22 +25,22 @@ function getParcelAgeDisplay(parcel: MapZoneResponse["parcels"][number]): string
 }
 
 function getInclusionLabel(parcel: MapZoneResponse["parcels"][number]): string {
-  if (parcel.inclusion_mode === "boundary_candidate") return "경계 후보";
-  if (parcel.inclusion_mode === "user_excluded") return "수동 제외";
-  if (parcel.included) return "확정 포함";
-  return "제외";
+  if (parcel.inclusion_mode === "boundary_candidate") return "경계 검토";
+  if (parcel.inclusion_mode === "user_excluded") return "사용자 제외";
+  if (parcel.included) return "계산 반영";
+  return "미반영";
 }
 
 function getConfidenceLabel(score: number): string {
   if (score >= 0.9) return "높음";
-  if (score >= 0.7) return "보통";
+  if (score >= 0.7) return "검토";
   return "낮음";
 }
 
 function getAiRecommendationLabel(parcel: MapZoneResponse["parcels"][number]): string {
-  if (parcel.ai_recommendation === "included") return "추천 포함";
-  if (parcel.ai_recommendation === "uncertain") return "검토 필요";
-  if (parcel.ai_recommendation === "excluded") return "추천 제외";
+  if (parcel.ai_recommendation === "included") return "AI 포함 권고";
+  if (parcel.ai_recommendation === "uncertain") return "AI 판단 유보";
+  if (parcel.ai_recommendation === "excluded") return "AI 제외 권고";
   return "-";
 }
 
@@ -53,21 +53,21 @@ function getAnomalyLabel(parcel: MapZoneResponse["parcels"][number]): string {
 function getZoneTrustState(summary: MapZoneResponse["summary"]) {
   if (summary.anomaly_parcel_count > 0 || summary.boundary_parcel_count >= 10) {
     return {
-      label: "수동 검토 권장",
-      description: `경계 후보 ${formatNumber(summary.boundary_parcel_count)}건, 이상치 ${formatNumber(summary.anomaly_parcel_count)}건을 우선 확인해 주세요.`,
+      label: "직접 확인 필요",
+      description: `경계 ${formatNumber(summary.boundary_parcel_count)}건, 값 검토 ${formatNumber(summary.anomaly_parcel_count)}건을 먼저 확인해 주세요.`,
       tone: "warning",
     } as const;
   }
   if (summary.boundary_parcel_count > 0 || summary.ai_uncertain_count > 0) {
     return {
-      label: "신뢰도 보통",
-      description: `경계 후보 ${formatNumber(summary.boundary_parcel_count)}건과 AI 검토 ${formatNumber(summary.ai_uncertain_count)}건이 있습니다.`,
+      label: "검토 포인트 있음",
+      description: `경계 ${formatNumber(summary.boundary_parcel_count)}건, AI 유보 ${formatNumber(summary.ai_uncertain_count)}건이 남아 있습니다.`,
       tone: "neutral",
     } as const;
   }
   return {
-    label: "신뢰도 높음",
-    description: "경계 후보와 이상치가 적어 기본 분석값을 바로 검토하기 좋습니다.",
+    label: "바로 검토 가능",
+    description: "경계나 이상치가 적어 현재 계산값을 바로 살펴보기 좋습니다.",
     tone: "positive",
   } as const;
 }
@@ -79,6 +79,7 @@ export function ZoneResultTable({
   activePnu,
   onFocus,
   onOpenBasic,
+  presentation = "full",
 }: {
   zoneResult: MapZoneResponse | null;
   selectedPnuSet: Set<string>;
@@ -86,6 +87,7 @@ export function ZoneResultTable({
   activePnu: string | null;
   onFocus: (parcel: MapZoneResponse["parcels"][number]) => void;
   onOpenBasic: (parcel: MapZoneResponse["parcels"][number]) => void;
+  presentation?: "full" | "table-only";
 }) {
   const [expandedPnuSet, setExpandedPnuSet] = useState<Set<string>>(new Set());
   const [filterMode, setFilterMode] = useState<"all" | "included" | "boundary" | "ai" | "anomaly" | "excluded">("all");
@@ -98,7 +100,7 @@ export function ZoneResultTable({
     if (filterMode === "ai") return parcels.filter((row) => row.ai_recommendation === "included" || row.ai_applied || row.selection_origin === "ai");
     if (filterMode === "anomaly") return parcels.filter((row) => row.anomaly_level && row.anomaly_level !== "none");
     if (filterMode === "excluded") return parcels.filter((row) => !row.included && row.inclusion_mode !== "boundary_candidate");
-    return parcels;
+    return parcels.filter((row) => row.inclusion_mode !== "user_excluded");
   }, [filterMode, parcels]);
 
   if (!zoneResult) {
@@ -122,6 +124,7 @@ export function ZoneResultTable({
 
   return (
     <>
+      {presentation === "full" ? (
       <div className="map-metrics zone-summary-grid">
         <MetricCard label="구역명" value={summary.zone_name} />
         <MetricCard label="기준연도(최신)" value={summary.base_year || "-"} />
@@ -129,8 +132,8 @@ export function ZoneResultTable({
         <MetricCard label="구역 내부 면적(㎡)" value={formatArea(summary.overlap_area_sqm_total)} />
         <MetricCard label="구역 내 필지 수" value={formatNumber(summary.parcel_count)} />
         <MetricCard label="경계 필지 수" value={formatNumber(summary.boundary_parcel_count)} />
-        <MetricCard label="AI 추천 포함" value={formatNumber(summary.ai_recommended_include_count)} />
-        <MetricCard label="AI 검토 필요" value={formatNumber(summary.ai_uncertain_count)} />
+        <MetricCard label="AI 권고 필지" value={formatNumber(summary.ai_recommended_include_count)} />
+        <MetricCard label="직접 검토 필지" value={formatNumber(summary.ai_uncertain_count)} />
         <MetricCard label="평균 공시지가(원/㎡)" value={formatNumber(summary.average_unit_price)} />
         <MetricCard label="포함 필지 기준 총가치(원)" value={formatNumber(summary.assessed_total_price)} />
         <MetricCard label="구역 내부 기준 총가치(원)" value={formatNumber(summary.geometry_assessed_total_price)} />
@@ -143,33 +146,36 @@ export function ZoneResultTable({
         <MetricCard label="용적률(%)" value={formatNumber(summary.average_floor_area_ratio)} />
         <MetricCard label="과소필지 비율(%)" value={formatNumber(summary.undersized_parcel_ratio)} />
       </div>
+      ) : null}
+      {presentation === "full" ? (
       <div className={`lab-inline-status ${trustState.tone}`}>
         <strong>{trustState.label}</strong>
         <span>{trustState.description}</span>
       </div>
-      {summary.ai_report_text ? <p className="hint">{summary.ai_report_text}</p> : null}
-      <p className="hint">필지 포함 기준: 구역 내부 {overlapPercent}% 이상 포함된 경우만 집계하며, 계산 반영 필지는 지도에서 진하게 표시합니다.</p>
-      <p className="hint">값 구분: 공시지가·용도지역은 원문값, 총가치는 계산값, 경계 후보/세대수 보정은 추정 또는 보정값입니다.</p>
-      <p className="hint">건축 지표 기준: 노후도는 사용승인 30년 이상, 과소필지는 90㎡ 미만 필지를 기준으로 계산합니다.</p>
-      {summary.building_data_message ? <p className="hint">{summary.building_data_message}</p> : null}
+      ) : null}
+      {presentation === "full" && summary.ai_report_text ? <p className="hint">{summary.ai_report_text}</p> : null}
+      {presentation === "full" ? <p className="hint">필지 포함 기준: 구역 내부 {overlapPercent}% 이상 포함된 경우만 집계하며, 계산 반영 필지는 지도에서 진하게 표시합니다.</p> : null}
+      {presentation === "full" ? <p className="hint">값 구분: 공시지가·용도지역은 원문값, 총가치는 계산값, 경계 후보와 세대수 보정은 참고용 보정값입니다.</p> : null}
+      {presentation === "full" ? <p className="hint">건축 지표 기준: 노후도는 사용승인 30년 이상, 과소필지는 90㎡ 미만 필지를 기준으로 계산합니다.</p> : null}
+      {presentation === "full" && summary.building_data_message ? <p className="hint">{summary.building_data_message}</p> : null}
       <div className="map-zone-filter-row">
         <button type="button" className={`lab-filter-chip ${filterMode === "all" ? "active" : ""}`} onClick={() => setFilterMode("all")}>
-          전체 {formatNumber(parcels.length)}
+          전체 {formatNumber(parcels.filter((row) => row.inclusion_mode !== "user_excluded").length)}
         </button>
         <button type="button" className={`lab-filter-chip ${filterMode === "included" ? "active" : ""}`} onClick={() => setFilterMode("included")}>
-          확정 포함 {formatNumber(summary.parcel_count)}
+          계산 반영 {formatNumber(summary.parcel_count)}
         </button>
         <button type="button" className={`lab-filter-chip ${filterMode === "boundary" ? "active" : ""}`} onClick={() => setFilterMode("boundary")}>
-          경계 후보 {formatNumber(summary.boundary_parcel_count)}
+          경계 검토 {formatNumber(summary.boundary_parcel_count)}
         </button>
         <button type="button" className={`lab-filter-chip ${filterMode === "ai" ? "active" : ""}`} onClick={() => setFilterMode("ai")}>
-          AI 추천 {formatNumber(summary.ai_recommended_include_count)}
+          AI 권고 {formatNumber(summary.ai_recommended_include_count)}
         </button>
         <button type="button" className={`lab-filter-chip ${filterMode === "anomaly" ? "active" : ""}`} onClick={() => setFilterMode("anomaly")}>
-          이상치 {formatNumber(summary.anomaly_parcel_count)}
+          값 검토 {formatNumber(summary.anomaly_parcel_count)}
         </button>
         <button type="button" className={`lab-filter-chip ${filterMode === "excluded" ? "active" : ""}`} onClick={() => setFilterMode("excluded")}>
-          제외 {formatNumber(summary.excluded_parcel_count)}
+          제외됨 {formatNumber(summary.excluded_parcel_count)}
         </button>
       </div>
       <div className="map-zone-table-wrap">
@@ -225,15 +231,15 @@ export function ZoneResultTable({
                       <td colSpan={12}>
                         <div className="map-zone-detail-grid">
                           <div className="map-zone-detail-item">
-                            <span>포함 판정</span>
+                            <span>현재 상태</span>
                             <strong>{getInclusionLabel(row)}</strong>
                           </div>
                           <div className="map-zone-detail-item">
-                            <span>AI 추천</span>
+                            <span>AI 의견</span>
                             <strong>{getAiRecommendationLabel(row)}</strong>
                           </div>
                           <div className="map-zone-detail-item">
-                            <span>AI 신뢰도</span>
+                            <span>AI 확신도</span>
                             <strong>
                               {row.ai_confidence_score === null ? "-" : `${getConfidenceLabel(row.ai_confidence_score)} (${formatPercent(row.ai_confidence_score * 100)})`}
                             </strong>
@@ -243,11 +249,11 @@ export function ZoneResultTable({
                             <strong>{row.ai_reason_text || "-"}</strong>
                           </div>
                           <div className="map-zone-detail-item">
-                            <span>이상치 검토</span>
+                            <span>값 점검 상태</span>
                             <strong>{getAnomalyLabel(row)}</strong>
                           </div>
                           <div className="map-zone-detail-item">
-                            <span>신뢰도</span>
+                            <span>규칙 점수</span>
                             <strong>{getConfidenceLabel(row.confidence_score)} ({formatPercent(row.confidence_score * 100)})</strong>
                           </div>
                           <div className="map-zone-detail-item">

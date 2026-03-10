@@ -14,6 +14,7 @@ import {
   analyzeMapZone,
   deleteMapZone,
   downloadMapLookupCsv,
+  downloadMapZonePreviewCsv,
   downloadMapZoneCsv,
   fetchMapLandDetails,
   fetchMapLookup,
@@ -799,11 +800,12 @@ function MapPageClient() {
 
   const runZoneDownload = async () => {
     if (!zoneResult) return;
-    if (!zoneResult.summary.is_saved || !zoneResult.summary.zone_id) {
-      setMessage("구역을 저장한 뒤 CSV를 내려받을 수 있습니다.");
-      return;
-    }
     try {
+      if (!zoneResult.summary.is_saved || !zoneResult.summary.zone_id) {
+        downloadMapZonePreviewCsv(zoneResult);
+        setMessage("현재 미리보기 결과를 CSV로 내려받았습니다.");
+        return;
+      }
       await downloadMapZoneCsv(zoneResult.summary.zone_id);
       setMessage("구역 분석 CSV 다운로드를 시작했습니다.");
     } catch (error) {
@@ -1390,9 +1392,9 @@ function MapPageClient() {
           <div className="map-overlay map-overlay-left-bottom">
             <div className="map-legend workspace">
               <span><i className="legend-swatch included" />확정 포함 {formatNumber(zoneResult.summary.parcel_count)}</span>
-              <span><i className="legend-swatch ai" />AI 추천 {formatNumber(zoneResultCounts.ai)}</span>
+              <span><i className="legend-swatch ai" />AI 권고 {formatNumber(zoneResultCounts.ai)}</span>
               <span><i className="legend-swatch boundary" />경계 검토 {formatNumber(zoneResultCounts.boundary)}</span>
-              <span><i className="legend-swatch anomaly" />이상치 검토 {formatNumber(zoneResultCounts.anomaly)}</span>
+              <span><i className="legend-swatch anomaly" />값 점검 {formatNumber(zoneResultCounts.anomaly)}</span>
             </div>
           </div>
         ) : null}

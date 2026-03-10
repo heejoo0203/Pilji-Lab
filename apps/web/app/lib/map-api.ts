@@ -235,6 +235,60 @@ export async function downloadMapZoneCsv(zoneId: string): Promise<void> {
   triggerDownload(blob, `zone_${zoneId}.csv`);
 }
 
+export function downloadMapZonePreviewCsv(zoneResult: MapZoneResponse): void {
+  const summary = zoneResult.summary;
+  const headerRows = [
+    ["구역명", summary.zone_name],
+    ["기준연도", summary.base_year ?? "-"],
+    ["포함 필지 수", String(summary.parcel_count)],
+    ["포함 필지 기준 총가치", String(summary.assessed_total_price)],
+    ["구역 내부 기준 총가치", String(summary.geometry_assessed_total_price)],
+    ["생성시각", new Date().toISOString()],
+  ];
+  const parcelHeader = [
+    "PNU",
+    "지번 주소",
+    "용도지역명",
+    "주용도",
+    "대지면적(㎡)",
+    "공시지가(원/㎡)",
+    "총 공시지가",
+    "전년 대비 증감률(%)",
+    "현재 상태",
+    "겹침률(%)",
+    "규칙 점수(%)",
+    "AI 의견",
+    "AI 확신도(%)",
+    "값 점검 상태",
+  ];
+  const parcelRows = zoneResult.parcels.map((item) => [
+    item.pnu,
+    item.jibun_address,
+    item.purpose_area_name ?? "",
+    item.primary_purpose_name ?? "",
+    item.site_area_sqm ?? item.area_sqm,
+    item.price_current,
+    item.estimated_total_price,
+    item.growth_rate,
+    item.inclusion_mode,
+    Number((item.overlap_ratio * 100).toFixed(2)),
+    Number((item.confidence_score * 100).toFixed(2)),
+    item.ai_recommendation ?? "",
+    item.ai_confidence_score === null ? "" : Number((item.ai_confidence_score * 100).toFixed(2)),
+    item.anomaly_level ?? "",
+  ]);
+
+  const csvText = [
+    ...headerRows.map((row) => row.map(toCsvCell).join(",")),
+    "",
+    parcelHeader.map(toCsvCell).join(","),
+    ...parcelRows.map((row) => row.map(toCsvCell).join(",")),
+  ].join("\r\n");
+
+  const blob = new Blob([`\uFEFF${csvText}`], { type: "text/csv;charset=utf-8" });
+  triggerDownload(blob, `zone_preview_${summary.zone_name || "analysis"}.csv`);
+}
+
 function triggerDownload(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -244,4 +298,9 @@ function triggerDownload(blob: Blob, fileName: string): void {
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+function toCsvCell(value: unknown): string {
+  const text = value === null || value === undefined ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
 }

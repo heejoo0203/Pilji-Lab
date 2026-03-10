@@ -3762,3 +3762,125 @@ body::before {
     display: none;
   }
 }
+.metric-value.compact-lg {
+  font-size: clamp(1.7rem, 1.9vw, 2.15rem);
+  letter-spacing: -0.05em;
+}
+
+.metric-value.compact-xl {
+  font-size: clamp(1.42rem, 1.55vw, 1.9rem);
+  letter-spacing: -0.06em;
+}
+
+.zone-selection-dock {
+  position: sticky;
+  bottom: 14px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(18, 59, 102, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 30px rgba(18, 59, 102, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.zone-selection-dock strong {
+  color: #123b66;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.zone-selection-dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zone-table-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: rgba(15, 27, 43, 0.42);
+  backdrop-filter: blur(6px);
+}
+
+.zone-table-modal {
+  width: min(1480px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 22px;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 28px 60px rgba(15, 27, 43, 0.22);
+}
+
+.zone-table-modal-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -22px -22px 18px;
+  padding: 18px 22px 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.92));
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(18, 59, 102, 0.08);
+}
+
+.zone-table-modal .map-zone-table-wrap {
+  max-height: none;
+}
+
+.zone-table-modal .map-zone-filter-row {
+  position: sticky;
+  top: 82px;
+  z-index: 1;
+  padding: 8px 0 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.92));
+}
+
+.zone-table-modal .data-table.map-zone-table {
+  min-width: 1680px;
+}
+
+@media (max-width: 860px) {
+  .zone-selection-dock {
+    flex-direction: column;
+    align-items: stretch;
+    bottom: 10px;
+  }
+
+  .zone-selection-dock-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .zone-table-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .zone-table-modal {
+    width: 100%;
+    max-height: min(88vh, 920px);
+    border-radius: 24px 24px 0 0;
+    padding: 18px;
+  }
+
+  .zone-table-modal-head {
+    top: 0;
+    margin: -18px -18px 14px;
+    padding: 16px 18px 12px;
+  }
+
+  .zone-table-modal .map-zone-filter-row {
+    top: 72px;
+  }
+}

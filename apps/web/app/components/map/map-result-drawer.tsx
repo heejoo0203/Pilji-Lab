@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { MapRowsTable } from "@/app/components/map/map-rows-table";
 import { MetricCard } from "@/app/components/map/metric-card";
 import { LoadingIndicator } from "@/app/components/ui/loading-indicator";
@@ -86,6 +88,7 @@ export function MapResultDrawer({
   onSelectZoneParcel: (pnu: string, checked: boolean) => void;
   onOpenZoneParcelInBasic: (parcel: MapZoneResponse["parcels"][number]) => void;
 }) {
+  const [tableExpanded, setTableExpanded] = useState(false);
   const hasContent = viewMode === "basic" ? Boolean(result) : Boolean(zoneResult);
 
   return (
@@ -224,13 +227,11 @@ export function MapResultDrawer({
                     {zoneSaveLoading ? "저장 중..." : "변경 저장"}
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="lab-btn lab-btn-tertiary compact"
-                  onClick={onDownloadZoneCsv}
-                  disabled={!zoneResult.summary.is_saved}
-                >
+                <button type="button" className="lab-btn lab-btn-tertiary compact" onClick={onDownloadZoneCsv}>
                   CSV 내보내기
+                </button>
+                <button type="button" className="lab-btn lab-btn-secondary compact" onClick={() => setTableExpanded(true)}>
+                  표 크게 보기
                 </button>
               </div>
             </div>
@@ -252,9 +253,56 @@ export function MapResultDrawer({
               onFocus={onFocusZoneParcel}
               onOpenBasic={onOpenZoneParcelInBasic}
             />
+            {selectedPnuSet.size > 0 ? (
+              <div className="zone-selection-dock">
+                <strong>{selectedPnuSet.size}개 필지 선택됨</strong>
+                <div className="zone-selection-dock-actions">
+                  <button
+                    type="button"
+                    className="lab-btn lab-btn-secondary compact"
+                    onClick={onIncludeSelected}
+                    disabled={zoneExcludeLoading}
+                  >
+                    {zoneExcludeLoading ? "처리 중..." : "선택 포함"}
+                  </button>
+                  <button
+                    type="button"
+                    className="lab-btn lab-btn-danger compact"
+                    onClick={onExcludeSelected}
+                    disabled={zoneExcludeLoading}
+                  >
+                    {zoneExcludeLoading ? "처리 중..." : "선택 삭제"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </>
         )}
       </div>
+      {viewMode === "zone" && zoneResult && tableExpanded ? (
+        <div className="zone-table-modal-overlay" onClick={() => setTableExpanded(false)}>
+          <div className="zone-table-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="map-result-drawer-head zone-table-modal-head">
+              <div>
+                <span className="map-result-drawer-kicker">Table View</span>
+                <h3>구역 내 필지 목록</h3>
+              </div>
+              <button type="button" className="map-result-drawer-close" onClick={() => setTableExpanded(false)}>
+                닫기
+              </button>
+            </div>
+            <ZoneResultTable
+              zoneResult={zoneResult}
+              selectedPnuSet={selectedPnuSet}
+              onSelect={onSelectZoneParcel}
+              activePnu={activeZoneParcelPnu}
+              onFocus={onFocusZoneParcel}
+              onOpenBasic={onOpenZoneParcelInBasic}
+              presentation="table-only"
+            />
+          </div>
+        </div>
+      ) : null}
     </aside>
   );
 }
