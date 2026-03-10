@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sys
 
@@ -21,9 +22,9 @@ from app.repositories.user_repository import get_user_by_email  # noqa: E402
 
 
 INITIAL_REVISION = "20260302_0001"
-DEFAULT_ADMIN_EMAIL = "admin@admin.com"
-DEFAULT_ADMIN_PASSWORD = "admin1234"
-DEFAULT_ADMIN_NAME = "admin"
+DEFAULT_ADMIN_EMAIL = os.getenv("ADMIN_SEED_EMAIL", "").strip()
+DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_SEED_PASSWORD", "").strip()
+DEFAULT_ADMIN_NAME = os.getenv("ADMIN_SEED_NAME", "admin").strip() or "admin"
 
 
 def _build_alembic_config() -> Config:
@@ -67,6 +68,10 @@ def _detect_bootstrap_revision(database_url: str) -> str:
 
 
 def _seed_default_admin() -> None:
+    if not DEFAULT_ADMIN_EMAIL or not DEFAULT_ADMIN_PASSWORD:
+        print("[migrations] ADMIN_SEED_EMAIL / ADMIN_SEED_PASSWORD 미설정 -> 관리자 시드 생성을 건너뜁니다.")
+        return
+
     db: Session = SessionLocal()
     try:
         existing = get_user_by_email(db, DEFAULT_ADMIN_EMAIL)

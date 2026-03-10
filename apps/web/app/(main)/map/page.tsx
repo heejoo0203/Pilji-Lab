@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useAuth } from "@/app/components/auth-provider";
@@ -14,7 +14,6 @@ import {
   deleteMapZone,
   downloadMapLookupCsv,
   downloadMapZoneCsv,
-  excludeMapZoneParcels,
   fetchMapLandDetails,
   fetchMapLookup,
   fetchMapLookupByPnu,
@@ -32,6 +31,7 @@ import {
   formatDateTime,
   formatNumber,
   formatRate,
+  buildZoneParcelOverlayStyle,
   parseParcelPolygonPaths,
   rebuildZonePreview,
   toPointKey,
@@ -125,6 +125,7 @@ function MapPageClient() {
   const [zonePoints, setZonePoints] = useState<MapZoneCoordinate[]>([]);
   const [selectedZonePnuSet, setSelectedZonePnuSet] = useState<Set<string>>(new Set());
   const [zoneResult, setZoneResult] = useState<MapZoneResponse | null>(null);
+  const [zoneBaseline, setZoneBaseline] = useState<MapZoneResponse | null>(null);
   const [zoneList, setZoneList] = useState<MapZoneListItem[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   const [message, setMessage] = useState("지도를 클릭하면 해당 필지의 공시지가를 조회합니다.");
@@ -136,6 +137,20 @@ function MapPageClient() {
   const aiApplicableCount = zoneResult
     ? zoneResult.parcels.filter((item) => !item.included && item.ai_recommendation === "included").length
     : 0;
+  const aiAppliedCount = zoneResult
+    ? zoneResult.parcels.filter((item) => item.ai_applied || item.selection_origin === "ai").length
+    : 0;
+  const aiPreviewEnabled = aiAppliedCount > 0;
+  const zoneResultCounts = useMemo(() => {
+    if (!zoneResult) {
+      return { ai: 0, anomaly: 0, boundary: 0 };
+    }
+    return {
+      ai: zoneResult.parcels.filter((item) => item.ai_recommendation === "included" || item.ai_applied || item.selection_origin === "ai").length,
+      anomaly: zoneResult.parcels.filter((item) => item.anomaly_level && item.anomaly_level !== "none").length,
+      boundary: zoneResult.parcels.filter((item) => item.inclusion_mode === "boundary_candidate").length,
+    };
+  }, [zoneResult]);
 
   const handleModeChange = (nextMode: "basic" | "zone") => {
     if (nextMode === "zone" && !isLoggedIn) {
@@ -250,6 +265,7 @@ function MapPageClient() {
           persistHistory: false,
           customMessage: "개별조회 결과에서 지도 기본조회로 이어졌습니다.",
         });
+        await hydrateLookupArtifacts(payload, { eagerRows: true, eagerLandDetails: true, revealLandDetails: true });
       } catch (error) {
         if (cancelled) return;
         if (pnu && forwardedAddress) {
@@ -262,6 +278,7 @@ function MapPageClient() {
               persistHistory: false,
               customMessage: "개별조회 주소를 기준으로 지도 기본조회로 이어졌습니다.",
             });
+            await hydrateLookupArtifacts(payload, { eagerRows: true, eagerLandDetails: true, revealLandDetails: true });
             return;
           } catch {
             // 주소 fallback도 실패하면 기존 에러 메시지를 노출한다.
@@ -561,14 +578,8 @@ function MapPageClient() {
     }
     setZoneExcludeLoading(true);
     try {
-      if (zoneResult.summary.is_saved && zoneResult.summary.zone_id) {
-        const payload = await excludeMapZoneParcels(zoneResult.summary.zone_id, Array.from(selectedZonePnuSet));
-        applyZoneResult(payload, { customMessage: "저장된 구역에서 선택한 필지를 제외했습니다.", fitToZone: false });
-        await loadZoneList();
-      } else {
-        const payload = applyLocalZoneDecision(zoneResult, { excludePnuSet: selectedZonePnuSet });
-        applyZoneResult(payload, { customMessage: "미리보기 결과에서 선택한 필지를 제외했습니다.", fitToZone: false });
-      }
+      const payload = applyLocalZoneDecision(zoneResult, { excludePnuSet: selectedZonePnuSet });
+      applyZoneResult(payload, { customMessage: "미리보기 결과에서 선택한 필지를 제외했습니다.", fitToZone: false, preserveBaseline: true });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "필지 제외 처리에 실패했습니다.");
     } finally {
@@ -582,19 +593,8 @@ function MapPageClient() {
     }
     setZoneExcludeLoading(true);
     try {
-      if (zoneResult.summary.is_saved && zoneResult.summary.zone_id) {
-        const payload = await updateMapZoneParcelDecisions(
-          zoneResult.summary.zone_id,
-          Array.from(selectedZonePnuSet),
-          [],
-          decisionOrigin,
-        );
-        applyZoneResult(payload, { customMessage: "선택한 필지를 계산 반영 목록에 포함했습니다.", fitToZone: false });
-        await loadZoneList();
-      } else {
-        const payload = applyLocalZoneDecision(zoneResult, { includePnuSet: selectedZonePnuSet, decisionOrigin });
-        applyZoneResult(payload, { customMessage: "미리보기 결과에서 선택한 필지를 포함했습니다.", fitToZone: false });
-      }
+      const payload = applyLocalZoneDecision(zoneResult, { includePnuSet: selectedZonePnuSet, decisionOrigin });
+      applyZoneResult(payload, { customMessage: "미리보기 결과에서 선택한 필지를 포함했습니다.", fitToZone: false, preserveBaseline: true });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "필지 포함 처리에 실패했습니다.");
     } finally {
@@ -614,25 +614,37 @@ function MapPageClient() {
 
     setZoneExcludeLoading(true);
     try {
-      if (zoneResult.summary.is_saved && zoneResult.summary.zone_id) {
-        const payload = await updateMapZoneParcelDecisions(
-          zoneResult.summary.zone_id,
-          aiRecommendedPnuList,
-          [],
-          "ai",
-          "AI 추천 포함 반영",
-        );
-        applyZoneResult(payload, { customMessage: `AI 추천 필지 ${aiRecommendedPnuList.length}건을 반영했습니다.`, fitToZone: false });
-        await loadZoneList();
-      } else {
-        const payload = applyLocalZoneDecision(zoneResult, { includePnuSet: new Set(aiRecommendedPnuList), decisionOrigin: "ai" });
-        applyZoneResult(payload, { customMessage: `AI 추천 필지 ${aiRecommendedPnuList.length}건을 미리보기 결과에 반영했습니다.`, fitToZone: false });
-      }
+      const payload = applyLocalZoneDecision(zoneResult, { includePnuSet: new Set(aiRecommendedPnuList), decisionOrigin: "ai" });
+      applyZoneResult(payload, { customMessage: `AI 추천 필지 ${aiRecommendedPnuList.length}건을 미리보기 결과에 반영했습니다.`, fitToZone: false, preserveBaseline: true });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "AI 추천 반영에 실패했습니다.");
     } finally {
       setZoneExcludeLoading(false);
     }
+  };
+
+  const runZoneDisableAi = () => {
+    if (!zoneResult || !zoneBaseline) return;
+    const aiPnuSet = new Set(
+      zoneResult.parcels
+        .filter((item) => item.ai_applied || item.selection_origin === "ai" || item.inclusion_mode === "ai_included")
+        .map((item) => item.pnu),
+    );
+    if (aiPnuSet.size === 0) {
+      setMessage("현재 결과에는 해제할 AI 추천 반영 상태가 없습니다.");
+      return;
+    }
+    const baselineMap = new Map(zoneBaseline.parcels.map((item) => [item.pnu, item]));
+    const nextParcels = zoneResult.parcels.map((item) => {
+      if (!aiPnuSet.has(item.pnu)) return item;
+      return baselineMap.get(item.pnu) ? { ...baselineMap.get(item.pnu)! } : item;
+    });
+    const payload = rebuildZonePreview(zoneResult, nextParcels);
+    applyZoneResult(payload, {
+      customMessage: `AI 추천 미리보기 ${aiPnuSet.size}건을 해제했습니다.`,
+      fitToZone: false,
+      preserveBaseline: true,
+    });
   };
 
   const loadZoneById = async (targetZoneId: string, customMessage?: string) => {
@@ -712,6 +724,30 @@ function MapPageClient() {
     }
   };
 
+  const runZonePersistChanges = async () => {
+    if (!zoneResult?.summary.zone_id) return;
+    setZoneSaveLoading(true);
+    try {
+      const payload = await updateMapZoneParcelDecisions(
+        zoneResult.summary.zone_id,
+        getZoneIncludedOverridePnuList(zoneResult),
+        getZoneExcludedPnuList(zoneResult),
+        zoneResult.parcels.some((item) => item.selection_origin === "ai") ? "ai" : "user",
+        "구역 미리보기 변경 저장",
+      );
+      applyZoneResult(payload, {
+        customMessage: "구역 변경 사항을 저장했습니다.",
+        fitToZone: false,
+        openLibrary: true,
+      });
+      await loadZoneList();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "구역 변경 저장에 실패했습니다.");
+    } finally {
+      setZoneSaveLoading(false);
+    }
+  };
+
   const toggleZoneSelection = (pnu: string, checked: boolean) => {
     setSelectedZonePnuSet((prev) => {
       const next = new Set(prev);
@@ -747,10 +783,13 @@ function MapPageClient() {
 
   const applyZoneResult = (
     payload: MapZoneResponse,
-    options?: { customMessage?: string; fitToZone?: boolean; openLibrary?: boolean },
+    options?: { customMessage?: string; fitToZone?: boolean; openLibrary?: boolean; preserveBaseline?: boolean },
   ) => {
     setViewMode("zone");
     setZoneResult(payload);
+    if (!options?.preserveBaseline) {
+      setZoneBaseline(payload);
+    }
     setActiveZoneId(payload.summary.is_saved ? payload.summary.zone_id : null);
     setZoneName(payload.summary.zone_name);
     setZonePoints(payload.coordinates);
@@ -774,6 +813,20 @@ function MapPageClient() {
 
   const getZoneIncludedOverridePnuList = (payload: MapZoneResponse): string[] => {
     return payload.parcels.filter((item) => item.included && !item.selected_by_rule).map((item) => item.pnu);
+  };
+
+  const revertZoneParcelsToBaseline = (
+    current: MapZoneResponse,
+    baseline: MapZoneResponse,
+    targetPnuSet: Set<string>,
+  ): MapZoneResponse => {
+    const baselineMap = new Map(baseline.parcels.map((item) => [item.pnu, item]));
+    const nextParcels = current.parcels.map((item) => {
+      if (!targetPnuSet.has(item.pnu)) return item;
+      const baselineItem = baselineMap.get(item.pnu);
+      return baselineItem ? { ...baselineItem } : item;
+    });
+    return rebuildZonePreview({ ...current, coordinates: baseline.coordinates }, nextParcels);
   };
 
   const applyLocalZoneDecision = (
@@ -820,6 +873,7 @@ function MapPageClient() {
         persistHistory: false,
         customMessage: "구역 결과에서 기본 조회로 전환했습니다.",
       });
+      await hydrateLookupArtifacts(payload, { eagerRows: true, eagerLandDetails: true, revealLandDetails: true });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "기본조회 전환에 실패했습니다.");
     } finally {
@@ -984,6 +1038,35 @@ function MapPageClient() {
     }
   };
 
+  const hydrateLookupArtifacts = async (
+    payload: MapLookupResponse,
+    options: { eagerRows?: boolean; eagerLandDetails?: boolean; revealLandDetails?: boolean } = {},
+  ) => {
+    if (options.eagerRows && payload.pnu && (!payload.rows || payload.rows.length === 0)) {
+      try {
+        const yearly = await fetchMapPriceRows(payload.pnu);
+        setResult((prev) => (prev && prev.pnu === payload.pnu ? { ...prev, rows: yearly.rows } : prev));
+      } catch {
+        // 초기 진입 시 연도별 이력이 없더라도 기본 조회 흐름은 유지한다.
+      }
+    }
+
+    if (options.eagerLandDetails && payload.pnu) {
+      try {
+        const details = await fetchMapLandDetails(payload.pnu);
+        setLandDetails(details);
+        if (options.revealLandDetails) {
+          setShowLandDetails(true);
+        }
+        if (!payload.area && details.area !== null) {
+          setResult((prev) => (prev && prev.pnu === payload.pnu ? { ...prev, area: details.area } : prev));
+        }
+      } catch {
+        // 상세 정보 실패는 기본 조회 결과 표시를 막지 않는다.
+      }
+    }
+  };
+
   const redrawZoneShapes = () => {
     const kakaoMaps = window.kakao?.maps;
     const map = mapRef.current;
@@ -1040,18 +1123,19 @@ function MapPageClient() {
     clearZoneParcelHighlights();
 
     for (const parcel of zoneResult.parcels) {
-      if (!parcel.included || !parcel.geometry_geojson) continue;
+      if (!parcel.geometry_geojson) continue;
+      const overlayStyle = buildZoneParcelOverlayStyle(parcel);
       const paths = parseParcelPolygonPaths(parcel.geometry_geojson, kakaoMaps);
       for (const path of paths) {
         const polygon = new kakaoMaps.Polygon({
           map,
           path,
           strokeWeight: 2,
-          strokeColor: "#1656a8",
-          strokeOpacity: 0.95,
+          strokeColor: overlayStyle.strokeColor,
+          strokeOpacity: overlayStyle.strokeOpacity,
           strokeStyle: "solid",
-          fillColor: "#4d91f0",
-          fillOpacity: 0.42,
+          fillColor: overlayStyle.fillColor,
+          fillOpacity: overlayStyle.fillOpacity,
         });
         polygon.setMap?.(map);
         zoneParcelPolygonsRef.current.push(polygon);
@@ -1192,15 +1276,26 @@ function MapPageClient() {
                       )}
                     </div>
 
-                    <div className="map-panel-actions map-zone-action-row">
+                    <div className="map-zone-ai-toggle">
                       <button
                         type="button"
-                        className="lab-btn lab-btn-secondary"
+                        className={`lab-filter-chip ${aiPreviewEnabled ? "active" : ""}`}
                         onClick={() => void runZoneApplyAi()}
                         disabled={!zoneResult || zoneExcludeLoading || aiApplicableCount === 0}
                       >
-                        {zoneExcludeLoading ? "처리 중..." : `AI 추천 적용 (${aiApplicableCount})`}
+                        AI 추천 적용함 {zoneResult ? `(${aiApplicableCount})` : ""}
                       </button>
+                      <button
+                        type="button"
+                        className={`lab-filter-chip ${!aiPreviewEnabled ? "active" : ""}`}
+                        onClick={runZoneDisableAi}
+                        disabled={!zoneResult || zoneExcludeLoading || !aiPreviewEnabled}
+                      >
+                        AI 추천 안 함
+                      </button>
+                    </div>
+
+                    <div className="map-panel-actions map-zone-selection-row">
                       <button
                         type="button"
                         className="lab-btn lab-btn-secondary"
@@ -1209,12 +1304,16 @@ function MapPageClient() {
                       >
                         {zoneExcludeLoading ? "처리 중..." : `선택 포함 (${selectedZonePnuSet.size})`}
                       </button>
+                    </div>
+                    <div className="map-panel-actions map-zone-action-row map-zone-save-row">
                       {!zoneResult?.summary.is_saved ? (
                         <button type="button" className="lab-btn lab-btn-secondary" onClick={() => void runZoneSave()} disabled={!zoneResult || zoneSaveLoading}>
                           {zoneSaveLoading ? "저장 중..." : "구역 저장"}
                         </button>
                       ) : (
-                        <span className="map-save-state">저장됨</span>
+                        <button type="button" className="lab-btn lab-btn-secondary" onClick={() => void runZonePersistChanges()} disabled={!zoneResult || zoneSaveLoading}>
+                          {zoneSaveLoading ? "저장 중..." : "변경 저장"}
+                        </button>
                       )}
                       <button
                         type="button"
@@ -1228,6 +1327,7 @@ function MapPageClient() {
                         CSV
                       </button>
                     </div>
+                    <div className="map-save-state">{zoneResult?.summary.is_saved ? "저장 구역" : "미저장 미리보기"}</div>
 
                     {zoneLibraryOpen ? (
                       <ZoneLibraryPanel
@@ -1277,6 +1377,14 @@ function MapPageClient() {
               </>
             ) : null}
           </div>
+          {viewMode === "zone" && zoneResult ? (
+            <div className="map-legend">
+              <span><i className="legend-swatch included" />확정 포함 {formatNumber(zoneResult.summary.parcel_count)}</span>
+              <span><i className="legend-swatch ai" />AI 추천 {formatNumber(zoneResultCounts.ai)}</span>
+              <span><i className="legend-swatch boundary" />경계 검토 {formatNumber(zoneResultCounts.boundary)}</span>
+              <span><i className="legend-swatch anomaly" />이상치 검토 {formatNumber(zoneResultCounts.anomaly)}</span>
+            </div>
+          ) : null}
           <div ref={mapContainerRef} className="map-canvas" />
         </div>
 

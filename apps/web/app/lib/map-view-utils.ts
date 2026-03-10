@@ -87,6 +87,56 @@ export function buildZoneAiReport(parcels: MapZoneResponse["parcels"]): string |
   return `AI가 ${parcels.length}개 필지를 검토했습니다. 추천 포함 ${includeCount}건, 경계 검토 ${uncertainCount}건, 이상치 검토 ${anomalyCount}건입니다.`;
 }
 
+export function buildZoneParcelOverlayStyle(parcel: MapZoneResponse["parcels"][number]) {
+  if (parcel.anomaly_level && parcel.anomaly_level !== "none") {
+    return {
+      tone: "anomaly" as const,
+      strokeColor: "#d74a4a",
+      fillColor: "rgba(226, 85, 85, 0.32)",
+      strokeOpacity: 0.95,
+      fillOpacity: 0.48,
+    };
+  }
+
+  if (parcel.inclusion_mode === "boundary_candidate") {
+    return {
+      tone: "boundary" as const,
+      strokeColor: "#f2a93b",
+      fillColor: "rgba(245, 185, 58, 0.32)",
+      strokeOpacity: 0.9,
+      fillOpacity: 0.34,
+    };
+  }
+
+  if (parcel.ai_recommendation === "included" || parcel.ai_applied || parcel.selection_origin === "ai") {
+    return {
+      tone: "ai" as const,
+      strokeColor: "#53a96a",
+      fillColor: "rgba(117, 199, 104, 0.3)",
+      strokeOpacity: 0.92,
+      fillOpacity: 0.36,
+    };
+  }
+
+  if (parcel.included) {
+    return {
+      tone: "included" as const,
+      strokeColor: "#245cb7",
+      fillColor: "rgba(36, 92, 183, 0.28)",
+      strokeOpacity: 0.9,
+      fillOpacity: 0.32,
+    };
+  }
+
+  return {
+    tone: "excluded" as const,
+    strokeColor: "rgba(93, 107, 119, 0.42)",
+    fillColor: "rgba(116, 129, 139, 0.12)",
+    strokeOpacity: 0.56,
+    fillOpacity: 0.12,
+  };
+}
+
 export function toPointKey(lat: number, lng: number): string {
   return `${lat.toFixed(6)}:${lng.toFixed(6)}`;
 }

@@ -76,13 +76,13 @@ alembic upgrade head
 ## DB 초기화 및 관리자 계정 생성
 ```bash
 cd apps/api
+set ADMIN_SEED_EMAIL=your-admin-email@example.com
+set ADMIN_SEED_PASSWORD=your-strong-password
+set ADMIN_SEED_NAME=관리자
 python scripts/reset_db_and_seed_admin.py
 ```
 
 참고:
 - `reset_db_and_seed_admin.py`는 개발용 초기화 스크립트이며 기존 데이터를 삭제합니다.
 
-생성 계정:
-- 닉네임: `admin`
-- 이메일: `admin@admin.com`
-- 비밀번호: `admin1234`
+또는 마이그레이션 전에 `ADMIN_SEED_EMAIL`, `ADMIN_SEED_PASSWORD`, `ADMIN_SEED_NAME`을 설정하면 초기 관리자 계정을 함께 생성할 수 있습니다.

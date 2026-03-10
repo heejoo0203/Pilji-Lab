@@ -156,12 +156,13 @@ npm run android:build:debug
 ## 관리자 시드
 ```bash
 cd apps/api
+set ADMIN_SEED_EMAIL=your-admin-email@example.com
+set ADMIN_SEED_PASSWORD=your-strong-password
+set ADMIN_SEED_NAME=관리자
 python scripts/reset_db_and_seed_admin.py
 ```
 
-기본 계정:
-- 이메일: `admin@admin.com`
-- 비밀번호: `admin1234`
+또는 마이그레이션 실행 전에 동일한 환경변수를 설정하면 초기 관리자 계정을 함께 생성할 수 있습니다.
 
 ## 배포 요약
 - Web: Vercel (`apps/web`)
@@ -188,8 +189,8 @@ python scripts/reset_db_and_seed_admin.py
 ```text
 autoLV/
   apps/
-    api/
-    web/
+    api/      # 현재 운영 API
+    web/      # 현재 운영 웹
   docs/
   infra/
   backend/   # legacy

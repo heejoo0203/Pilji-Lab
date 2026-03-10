@@ -50,6 +50,28 @@ function getAnomalyLabel(parcel: MapZoneResponse["parcels"][number]): string {
   return "검토 필요";
 }
 
+function getZoneTrustState(summary: MapZoneResponse["summary"]) {
+  if (summary.anomaly_parcel_count > 0 || summary.boundary_parcel_count >= 10) {
+    return {
+      label: "수동 검토 권장",
+      description: `경계 후보 ${formatNumber(summary.boundary_parcel_count)}건, 이상치 ${formatNumber(summary.anomaly_parcel_count)}건을 우선 확인해 주세요.`,
+      tone: "warning",
+    } as const;
+  }
+  if (summary.boundary_parcel_count > 0 || summary.ai_uncertain_count > 0) {
+    return {
+      label: "신뢰도 보통",
+      description: `경계 후보 ${formatNumber(summary.boundary_parcel_count)}건과 AI 검토 ${formatNumber(summary.ai_uncertain_count)}건이 있습니다.`,
+      tone: "neutral",
+    } as const;
+  }
+  return {
+    label: "신뢰도 높음",
+    description: "경계 후보와 이상치가 적어 기본 분석값을 바로 검토하기 좋습니다.",
+    tone: "positive",
+  } as const;
+}
+
 export function ZoneResultTable({
   zoneResult,
   selectedPnuSet,
@@ -64,13 +86,15 @@ export function ZoneResultTable({
   onOpenBasic: (parcel: MapZoneResponse["parcels"][number]) => void;
 }) {
   const [expandedPnuSet, setExpandedPnuSet] = useState<Set<string>>(new Set());
-  const [filterMode, setFilterMode] = useState<"all" | "included" | "boundary" | "excluded">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "included" | "boundary" | "ai" | "anomaly" | "excluded">("all");
   const previewSummary = zoneResult?.summary ?? null;
   const parcels = zoneResult?.parcels ?? [];
   const overlapPercent = Math.round(((previewSummary?.overlap_threshold ?? 0.9) || 0.9) * 100);
   const visibleParcels = useMemo(() => {
     if (filterMode === "included") return parcels.filter((row) => row.included);
     if (filterMode === "boundary") return parcels.filter((row) => row.inclusion_mode === "boundary_candidate");
+    if (filterMode === "ai") return parcels.filter((row) => row.ai_recommendation === "included" || row.ai_applied || row.selection_origin === "ai");
+    if (filterMode === "anomaly") return parcels.filter((row) => row.anomaly_level && row.anomaly_level !== "none");
     if (filterMode === "excluded") return parcels.filter((row) => !row.included && row.inclusion_mode !== "boundary_candidate");
     return parcels;
   }, [filterMode, parcels]);
@@ -80,6 +104,7 @@ export function ZoneResultTable({
   }
 
   const summary = zoneResult.summary;
+  const trustState = getZoneTrustState(summary);
 
   const toggleExpanded = (pnu: string) => {
     setExpandedPnuSet((prev) => {
@@ -116,6 +141,10 @@ export function ZoneResultTable({
         <MetricCard label="용적률(%)" value={formatNumber(summary.average_floor_area_ratio)} />
         <MetricCard label="과소필지 비율(%)" value={formatNumber(summary.undersized_parcel_ratio)} />
       </div>
+      <div className={`lab-inline-status ${trustState.tone}`}>
+        <strong>{trustState.label}</strong>
+        <span>{trustState.description}</span>
+      </div>
       {summary.ai_report_text ? <p className="hint">{summary.ai_report_text}</p> : null}
       <p className="hint">필지 포함 기준: 구역 내부 {overlapPercent}% 이상 포함된 경우만 집계하며, 계산 반영 필지는 지도에서 진하게 표시합니다.</p>
       <p className="hint">값 구분: 공시지가·용도지역은 원문값, 총가치는 계산값, 경계 후보/세대수 보정은 추정 또는 보정값입니다.</p>
@@ -131,6 +160,12 @@ export function ZoneResultTable({
         <button type="button" className={`lab-filter-chip ${filterMode === "boundary" ? "active" : ""}`} onClick={() => setFilterMode("boundary")}>
           경계 후보 {formatNumber(summary.boundary_parcel_count)}
         </button>
+        <button type="button" className={`lab-filter-chip ${filterMode === "ai" ? "active" : ""}`} onClick={() => setFilterMode("ai")}>
+          AI 추천 {formatNumber(summary.ai_recommended_include_count)}
+        </button>
+        <button type="button" className={`lab-filter-chip ${filterMode === "anomaly" ? "active" : ""}`} onClick={() => setFilterMode("anomaly")}>
+          이상치 {formatNumber(summary.anomaly_parcel_count)}
+        </button>
         <button type="button" className={`lab-filter-chip ${filterMode === "excluded" ? "active" : ""}`} onClick={() => setFilterMode("excluded")}>
           제외 {formatNumber(summary.excluded_parcel_count)}
         </button>
@@ -141,15 +176,15 @@ export function ZoneResultTable({
             <tr>
               <th className="center narrow">선택</th>
               <th className="address-col">지번 주소</th>
-              <th className="center">용도지역명</th>
-              <th className="center">주용도</th>
-              <th className="right">대지면적(㎡)</th>
-              <th className="right">공시지가(원/㎡)</th>
-              <th className="right">총 공시지가</th>
-              <th className="right">전년 대비 증감률(%)</th>
-              <th className="center">건물연식/노후</th>
-              <th className="right">노후도(%)</th>
-              <th className="right">현재 용적률(%)</th>
+              <th className="center zone-col-purpose">용도지역명</th>
+              <th className="center zone-col-use">주용도</th>
+              <th className="right zone-col-area">대지면적(㎡)</th>
+              <th className="right zone-col-price">공시지가(원/㎡)</th>
+              <th className="right zone-col-price-total">총 공시지가</th>
+              <th className="right zone-col-growth">전년 대비 증감률(%)</th>
+              <th className="center zone-col-age">건물연식/노후</th>
+              <th className="right zone-col-aging">노후도(%)</th>
+              <th className="right zone-col-far">현재 용적률(%)</th>
               <th className="center narrow">상세</th>
             </tr>
           </thead>

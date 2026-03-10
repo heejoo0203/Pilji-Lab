@@ -1894,6 +1894,11 @@ body::before {
   grid-template-columns: minmax(0, 1.15fr) 420px;
 }
 
+.search-page .lab-action-grid {
+  grid-template-columns: 420px minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
 .search-page .lab-hero-copy h1 {
   font-size: clamp(30px, 3.9vw, 50px);
 }
@@ -1975,7 +1980,7 @@ body::before {
   margin-top: 16px;
   padding: 16px;
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   border-radius: 16px;
@@ -1984,13 +1989,21 @@ body::before {
 
 .search-inline-inputs {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 10px;
   align-items: center;
 }
 
+.search-inline-inputs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .search-inline-inputs.road {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.search-inline-inputs > .lab-input {
+  width: 100%;
+  min-width: 0;
 }
 
 .search-inline-label {
@@ -2004,6 +2017,7 @@ body::before {
   font-size: 20px;
   font-weight: 700;
   text-align: center;
+  display: none;
 }
 
 .search-form-actions {
@@ -2122,7 +2136,8 @@ body::before {
   display: grid;
   grid-template-columns: 392px minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+  min-height: calc(100vh - 148px);
 }
 
 .map-side-panel {
@@ -2130,6 +2145,10 @@ body::before {
   top: 98px;
   display: grid;
   gap: 18px;
+  max-height: calc(100vh - 128px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
 }
 
 .map-side-panel.collapsed {
@@ -2158,7 +2177,8 @@ body::before {
 }
 
 .map-panel-actions.stacked .lab-btn,
-.map-zone-action-row .lab-btn {
+.map-zone-action-row .lab-btn,
+.map-zone-selection-row .lab-btn {
   width: 100%;
   min-width: 0;
   white-space: nowrap;
@@ -2168,15 +2188,24 @@ body::before {
   width: 100%;
 }
 
+.map-zone-selection-row {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
 .map-zone-action-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
   align-items: center;
 }
 
-.map-zone-action-row .map-save-state {
-  width: 100%;
-  justify-content: center;
+.map-zone-save-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.map-zone-ai-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .mypage-page {
@@ -2223,12 +2252,17 @@ body::before {
 .map-stage-column {
   display: grid;
   gap: 16px;
+  max-height: calc(100vh - 128px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
 }
 
 .map-frame {
   position: relative;
   padding: 0;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .map-canvas {
@@ -2243,6 +2277,58 @@ body::before {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.map-legend {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(18, 59, 102, 0.1);
+  box-shadow: 0 14px 32px rgba(22, 41, 73, 0.12);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lab-ink-soft);
+}
+
+.map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.legend-swatch.included {
+  background: rgba(36, 92, 183, 0.45);
+  border-color: rgba(36, 92, 183, 0.7);
+}
+
+.legend-swatch.ai {
+  background: rgba(117, 199, 104, 0.42);
+  border-color: rgba(83, 169, 106, 0.8);
+}
+
+.legend-swatch.boundary {
+  background: rgba(245, 185, 58, 0.45);
+  border-color: rgba(242, 169, 59, 0.8);
+}
+
+.legend-swatch.anomaly {
+  background: rgba(226, 85, 85, 0.4);
+  border-color: rgba(215, 74, 74, 0.8);
 }
 
 .lab-float-btn {
@@ -2376,6 +2462,33 @@ body::before {
   width: 76px;
 }
 
+.map-zone-table .zone-col-purpose {
+  min-width: 132px;
+}
+
+.map-zone-table .zone-col-use {
+  min-width: 126px;
+}
+
+.map-zone-table .zone-col-area,
+.map-zone-table .zone-col-price,
+.map-zone-table .zone-col-aging,
+.map-zone-table .zone-col-far {
+  min-width: 126px;
+}
+
+.map-zone-table .zone-col-price-total {
+  min-width: 160px;
+}
+
+.map-zone-table .zone-col-growth {
+  min-width: 144px;
+}
+
+.map-zone-table .zone-col-age {
+  min-width: 140px;
+}
+
 .map-inline-detail-btn {
   min-width: 58px;
   padding: 8px 12px;
@@ -2398,6 +2511,41 @@ body::before {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   padding: 16px;
+}
+
+.lab-inline-status {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  margin: 14px 0 4px;
+  border-radius: 16px;
+  border: 1px solid rgba(18, 59, 102, 0.12);
+  background: rgba(245, 250, 255, 0.86);
+}
+
+.lab-inline-status strong {
+  font-size: 15px;
+  color: var(--lab-primary-strong);
+}
+
+.lab-inline-status span {
+  font-size: 13px;
+  color: var(--lab-ink-soft);
+}
+
+.lab-inline-status.positive {
+  border-color: rgba(46, 173, 107, 0.2);
+  background: rgba(232, 248, 240, 0.88);
+}
+
+.lab-inline-status.neutral {
+  border-color: rgba(31, 95, 175, 0.2);
+  background: rgba(239, 246, 255, 0.92);
+}
+
+.lab-inline-status.warning {
+  border-color: rgba(242, 169, 59, 0.24);
+  background: rgba(255, 247, 230, 0.92);
 }
 
 .map-zone-detail-item {
@@ -2430,6 +2578,8 @@ body::before {
 .map-save-state {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 100%;
   padding: 10px 14px;
   border-radius: 999px;
   background: rgba(46, 173, 107, 0.12);
@@ -2492,7 +2642,11 @@ body::before {
   }
 
   .map-zone-action-row {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map-zone-save-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .search-land-details-grid {
@@ -2523,6 +2677,10 @@ body::before {
   .lab-hero,
   .lab-surface {
     padding: 20px;
+  }
+
+  .search-page .lab-action-grid {
+    grid-template-columns: 1fr;
   }
 
   .search-form-grid,
@@ -2568,6 +2726,15 @@ body::before {
 
   .map-stage-column {
     order: 1;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .map-zone-ai-toggle,
+  .map-zone-save-row,
+  .map-zone-action-row {
+    grid-template-columns: 1fr;
   }
 
   .map-bottom-sheet {
@@ -2620,6 +2787,12 @@ body::before {
 
   .map-zone-table {
     min-width: 1320px;
+  }
+
+  .map-legend {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
   }
 
   .map-zone-detail-grid {
