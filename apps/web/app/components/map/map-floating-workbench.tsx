@@ -68,16 +68,20 @@ export function MapFloatingWorkbench({
 }) {
   const isBasic = viewMode === "basic";
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const toggleLabel = collapsed ? (isBasic ? "개별조회" : "구역조회") : compactMode ? "접기" : "패널 접기";
+  const toggleAriaLabel = collapsed ? `${isBasic ? "개별조회" : "구역조회"} 패널 열기` : "패널 접기";
 
   return (
-    <div className={`map-workspace-panel ${collapsed ? "collapsed" : ""}`}>
+    <div className={`map-workspace-panel ${collapsed ? "collapsed" : ""} ${collapsed && compactMode ? "compact-collapsed" : ""}`}>
       <div className="map-workspace-panel-head">
-        <div>
-          <span className="map-workspace-panel-kicker">{isBasic ? "Parcel Lookup" : "Zone Workspace"}</span>
-          <strong>{isBasic ? "필지 조회" : "구역 분석"}</strong>
-        </div>
-        <button type="button" className="map-workspace-panel-toggle" onClick={onToggleCollapse}>
-          {collapsed ? "패널 열기" : "패널 접기"}
+        {!(collapsed && compactMode) ? (
+          <div>
+            <span className="map-workspace-panel-kicker">{isBasic ? "Parcel Lookup" : "Zone Workspace"}</span>
+            <strong>{isBasic ? "필지 조회" : "구역 분석"}</strong>
+          </div>
+        ) : null}
+        <button type="button" className="map-workspace-panel-toggle" onClick={onToggleCollapse} aria-label={toggleAriaLabel}>
+          {toggleLabel}
         </button>
       </div>
 

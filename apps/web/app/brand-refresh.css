@@ -2932,6 +2932,29 @@ body::before {
   min-width: 112px;
 }
 
+.map-workspace-panel.compact-collapsed {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.map-workspace-panel.compact-collapsed .map-workspace-panel-head {
+  justify-content: flex-start;
+}
+
+.map-workspace-panel.compact-collapsed .map-workspace-panel-toggle {
+  min-height: 44px;
+  padding: 0 16px;
+  border-color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--lab-primary-strong);
+  font-weight: 800;
+  box-shadow: 0 12px 24px rgba(16, 35, 63, 0.12);
+}
+
 .map-workspace-panel-head {
   display: flex;
   align-items: center;
@@ -3744,6 +3767,37 @@ body::before {
     grid-template-columns: 1fr;
   }
 
+  .search-page .lab-hero,
+  .search-workbench,
+  .search-report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-page .lab-action-grid {
+    display: none;
+  }
+
+  .search-workbench {
+    gap: 16px;
+  }
+
+  .search-page .lab-hero-copy h1 {
+    font-size: clamp(28px, 8vw, 36px);
+  }
+
+  .search-page .lab-hero-actions,
+  .search-report-side .lab-action-stack {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .search-page .lab-hero-actions .lab-btn,
+  .search-report-side .lab-card-link,
+  .search-report-side .lab-card-link.secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
   .search-form-grid,
   .search-metric-grid,
   .search-land-details-grid,
@@ -4066,12 +4120,37 @@ body::before {
   .map-result-drawer.basic-mode .metric-value,
   .map-result-drawer.basic-mode .metric-value.compact-lg,
   .map-result-drawer.basic-mode .metric-value.compact-xl {
-    font-size: clamp(14px, 4.2vw, 18px);
-    line-height: 1.18;
+    font-size: clamp(12.5px, 3.9vw, 16px);
+    line-height: 1.24;
     white-space: normal;
-    word-break: break-word;
+    word-break: keep-all;
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
+  }
+
+  .map-result-drawer .metric-card {
+    min-height: 108px;
+    padding: 16px;
+  }
+
+  .map-result-drawer .metric-label {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .map-result-drawer.basic-mode .map-result-metric-grid .metric-card:nth-child(4) {
+    grid-column: 1 / -1;
+    min-height: 96px;
+  }
+
+  .map-result-action-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map-result-action-row .lab-btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .map-yearly-table thead th,

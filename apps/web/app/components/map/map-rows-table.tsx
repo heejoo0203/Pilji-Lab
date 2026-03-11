@@ -40,7 +40,7 @@ export function MapRowsTable({
     );
   }
   return (
-    <table className="data-table map-yearly-table">
+    <table className="data-table mobile-card-table map-yearly-table">
       <colgroup>
         <col style={{ width: "18%" }} />
         <col style={{ width: "38%" }} />
