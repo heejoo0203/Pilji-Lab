@@ -114,6 +114,19 @@ function MapPageClient() {
   const loadedZoneIdRef = useRef<string>("");
   const loadedPnuRef = useRef<string>("");
   const modeRef = useRef<"basic" | "zone">("basic");
+  const scheduleLookupRef = useRef<(lat: number, lng: number) => void>(() => {});
+  const applyLookupResultRef = useRef<(payload: MapLookupResponse, options: { persistHistory: boolean; customMessage?: string }) => void>(
+    () => {},
+  );
+  const applyZoneResultRef = useRef<
+    (
+      payload: MapZoneResponse,
+      options?: { customMessage?: string; fitToZone?: boolean; openLibrary?: boolean; preserveBaseline?: boolean },
+    ) => void
+  >(() => {});
+  const redrawZoneShapesRef = useRef<() => void>(() => {});
+  const redrawZoneParcelHighlightsRef = useRef<() => void>(() => {});
+  const fitMapToPointsRef = useRef<(points: MapZoneCoordinate[]) => void>(() => {});
 
   const [viewMode, setViewMode] = useState<"basic" | "zone">("basic");
   const [mapReady, setMapReady] = useState(false);
@@ -258,7 +271,7 @@ function MapPageClient() {
             appendZonePoint(lat, lng);
             return;
           }
-          scheduleLookup(lat, lng);
+          scheduleLookupRef.current(lat, lng);
         });
       })
       .catch((error) => {
@@ -290,10 +303,10 @@ function MapPageClient() {
         if (cancelled) return;
         loadedPnuRef.current = loadKey;
         setViewMode("basic");
-        applyLookupResult(payload, {
-          persistHistory: false,
-          customMessage: "개별조회 결과에서 지도 기본조회로 이어졌습니다.",
-        });
+            applyLookupResultRef.current(payload, {
+              persistHistory: false,
+              customMessage: "개별조회 결과에서 지도 기본조회로 이어졌습니다.",
+            });
         await hydrateLookupArtifacts(payload, { eagerRows: true, eagerLandDetails: true, revealLandDetails: true });
       } catch (error) {
         if (cancelled) return;
@@ -303,7 +316,7 @@ function MapPageClient() {
             if (cancelled) return;
             loadedPnuRef.current = loadKey;
             setViewMode("basic");
-            applyLookupResult(payload, {
+            applyLookupResultRef.current(payload, {
               persistHistory: false,
               customMessage: "개별조회 주소를 기준으로 지도 기본조회로 이어졌습니다.",
             });
@@ -343,13 +356,16 @@ function MapPageClient() {
           const payload = await fetchMapLookupByPnu(record.pnu);
           if (cancelled) return;
           setViewMode("basic");
-          applyLookupResult(payload, { persistHistory: false, customMessage: "조회기록에서 지도 결과를 불러왔습니다." });
+          applyLookupResultRef.current(payload, { persistHistory: false, customMessage: "조회기록에서 지도 결과를 불러왔습니다." });
         } catch (error) {
           if (!record.address_summary) throw error;
           const payload = await searchMapLookupByAddress(record.address_summary);
           if (cancelled) return;
           setViewMode("basic");
-          applyLookupResult(payload, { persistHistory: false, customMessage: "조회기록 주소를 기준으로 지도 결과를 불러왔습니다." });
+          applyLookupResultRef.current(payload, {
+            persistHistory: false,
+            customMessage: "조회기록 주소를 기준으로 지도 결과를 불러왔습니다.",
+          });
         }
       } catch (error) {
         if (cancelled) return;
@@ -373,7 +389,7 @@ function MapPageClient() {
         const payload = await fetchMapZone(zoneId);
         if (cancelled) return;
         loadedZoneIdRef.current = zoneId;
-        applyZoneResult(payload, {
+        applyZoneResultRef.current(payload, {
           customMessage: "저장된 구역 분석 결과를 불러왔습니다.",
           fitToZone: true,
           openLibrary: true,
@@ -408,7 +424,7 @@ function MapPageClient() {
       clearZoneShapes();
       return;
     }
-    redrawZoneShapes();
+    redrawZoneShapesRef.current();
   }, [mapReady, viewMode, zonePoints]);
 
   useEffect(() => {
@@ -417,12 +433,12 @@ function MapPageClient() {
       clearZoneParcelHighlights();
       return;
     }
-    redrawZoneParcelHighlights();
+    redrawZoneParcelHighlightsRef.current();
   }, [mapReady, viewMode, zoneResult, activeZoneParcelPnu]);
 
   useEffect(() => {
     if (!mapReady || !activeZoneId || !zoneResult?.coordinates?.length) return;
-    fitMapToPoints(zoneResult.coordinates);
+    fitMapToPointsRef.current(zoneResult.coordinates);
   }, [mapReady, activeZoneId, zoneResult]);
 
   useEffect(() => {
@@ -1322,6 +1338,13 @@ function MapPageClient() {
     }
     zoneParcelPolygonsRef.current = [];
   };
+
+  scheduleLookupRef.current = scheduleLookup;
+  applyLookupResultRef.current = applyLookupResult;
+  applyZoneResultRef.current = applyZoneResult;
+  redrawZoneShapesRef.current = redrawZoneShapes;
+  redrawZoneParcelHighlightsRef.current = redrawZoneParcelHighlights;
+  fitMapToPointsRef.current = fitMapToPoints;
 
   return (
     <section className="map-workspace-shell">
