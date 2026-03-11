@@ -32,6 +32,7 @@ export default function MyPage() {
   const [termsLoading, setTermsLoading] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
   const [activeAction, setActiveAction] = useState<null | "profile" | "password" | "withdrawal">(null);
+  const androidApkPath = "/downloads/autoLV-android-release-v2.2.0.apk";
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -273,9 +274,10 @@ export default function MyPage() {
             <h2>앱 다운로드</h2>
             <p>안드로이드 기기에서 필지랩 앱을 설치해 모바일 환경에서 바로 사용할 수 있습니다.</p>
           </div>
-          <a className="lab-btn lab-btn-primary full" href="/downloads/autoLV-android-release-v2.1.2.apk" download target="_blank" rel="noopener noreferrer">
+          <a className="lab-btn lab-btn-primary full" href={androidApkPath} download target="_blank" rel="noopener noreferrer">
             필지랩 안드로이드 APK 다운로드
           </a>
+          <p className="hint">현재 권장 다운로드 버전: v2.2.0</p>
         </article>
 
         <article className="lab-surface mypage-card-pro danger-zone">

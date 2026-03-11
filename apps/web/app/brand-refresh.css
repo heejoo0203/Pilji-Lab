@@ -880,6 +880,18 @@ body > div[style*="position: fixed"] {
   margin-bottom: 18px;
 }
 
+.bulk-table-head .lab-section-head {
+  min-width: 0;
+}
+
+.table-toolbar-meta,
+.pagination-status {
+  margin: 0;
+  color: var(--lab-ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -912,11 +924,55 @@ body > div[style*="position: fixed"] {
   margin-top: 18px;
 }
 
+.pagination-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  color: var(--lab-ink-soft);
+  font-weight: 800;
+}
+
 .history-filter-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
-  margin: 22px 0 18px;
+  margin: 22px 0 14px;
+}
+
+.history-filter-actions,
+.history-filter-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.history-filter-actions {
+  margin-bottom: 14px;
+}
+
+.history-filter-summary {
+  margin-bottom: 20px;
+}
+
+.history-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(18, 59, 102, 0.05);
+  border: 1px solid rgba(18, 59, 102, 0.08);
+  color: var(--lab-primary-strong);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .history-sort-btn {
@@ -943,6 +999,14 @@ body > div[style*="position: fixed"] {
 
 .history-address-col {
   text-align: left;
+}
+
+.history-action-col {
+  text-align: center;
+}
+
+.history-restore-btn {
+  min-width: 96px;
 }
 
 .empty-box,
@@ -1463,6 +1527,16 @@ body > div[style*="position: fixed"] {
     grid-template-columns: 1fr;
   }
 
+  .bulk-head-actions,
+  .history-filter-actions {
+    width: 100%;
+  }
+
+  .bulk-head-actions .lab-btn,
+  .history-filter-actions .lab-btn {
+    flex: 1 1 180px;
+  }
+
   .panel,
   .hero-surface,
   .page-hero,
@@ -1596,6 +1670,15 @@ body > div[style*="position: fixed"] {
   .mobile-card-table td.checkbox-col,
   .mobile-card-table td[data-label="선택"] {
     justify-content: flex-start;
+  }
+
+  .history-filter-summary {
+    gap: 8px;
+  }
+
+  .history-filter-pill {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -1892,6 +1975,11 @@ body::before {
 .lab-float-btn,
 .lab-card-link.secondary {
   padding: 8px 12px;
+}
+
+.lab-btn.full,
+.lab-card-link.full {
+  width: 100%;
 }
 
 .lab-hero-panel {

@@ -23,16 +23,26 @@ export function BulkJobTable(props: Props) {
   const anySelected = props.selectedIds.size > 0;
 
   return (
-    <section className="panel">
+    <section className="lab-surface">
       <div className="bulk-table-head">
-        <h2>파일 작업 이력</h2>
+        <div className="lab-section-head compact">
+          <h2>파일 작업 이력</h2>
+          <p className="table-toolbar-meta">
+            현재 결과 {props.jobs.length}건 · 선택 {props.selectedIds.size}건
+          </p>
+        </div>
         <div className="bulk-head-actions">
-          <button type="button" className="nav-item" onClick={props.onRefresh} disabled={props.loading || props.deleting}>
+          <button
+            type="button"
+            className="lab-btn lab-btn-tertiary compact"
+            onClick={props.onRefresh}
+            disabled={props.loading || props.deleting}
+          >
             새로고침
           </button>
           <button
             type="button"
-            className="nav-item danger"
+            className="lab-btn lab-btn-danger compact"
             onClick={props.onDeleteSelected}
             disabled={!anySelected || props.deleting || props.loading}
           >
@@ -78,7 +88,12 @@ export function BulkJobTable(props: Props) {
                   <td data-label="조회시작 일시">{formatDateTime(job.created_at)}</td>
                   <td data-label="다운로드">
                     {job.can_download ? (
-                      <button type="button" className="nav-item" disabled={props.deleting} onClick={() => props.onDownload(job)}>
+                      <button
+                        type="button"
+                        className="lab-btn lab-btn-secondary compact"
+                        disabled={props.deleting}
+                        onClick={() => props.onDownload(job)}
+                      >
                         다운로드
                       </button>
                     ) : (
@@ -117,32 +132,80 @@ function BulkJobDiagnosis({ message }: { message: string }) {
 
 function Pagination(props: { page: number; totalPages: number; onChange: (page: number) => void }) {
   if (props.totalPages <= 1) return null;
-  const pages = Array.from({ length: props.totalPages }, (_, idx) => idx + 1);
+  const pages = buildPaginationItems(props.page, props.totalPages);
   return (
-    <div className="pagination">
-      <button type="button" className="nav-item" disabled={props.page <= 1} onClick={() => props.onChange(props.page - 1)}>
-        이전
-      </button>
-      {pages.map((page) => (
+    <div className="pagination-wrap">
+      <p className="pagination-status">
+        {props.page} / {props.totalPages} 페이지
+      </p>
+      <div className="pagination">
         <button
           type="button"
-          key={page}
-          className={`nav-item ${page === props.page ? "active" : ""}`}
-          onClick={() => props.onChange(page)}
+          className="lab-btn lab-btn-tertiary compact"
+          disabled={props.page <= 1}
+          onClick={() => props.onChange(props.page - 1)}
         >
-          {page}
+          이전
         </button>
-      ))}
-      <button
-        type="button"
-        className="nav-item"
-        disabled={props.page >= props.totalPages}
-        onClick={() => props.onChange(props.page + 1)}
-      >
-        다음
-      </button>
+        {pages.map((page, index) =>
+          typeof page === "number" ? (
+            <button
+              type="button"
+              key={page}
+              className={`lab-btn compact ${page === props.page ? "lab-btn-secondary" : "lab-btn-tertiary"}`}
+              onClick={() => props.onChange(page)}
+            >
+              {page}
+            </button>
+          ) : (
+            <span key={`${page}-${index}`} className="pagination-ellipsis" aria-hidden>
+              ...
+            </span>
+          ),
+        )}
+        <button
+          type="button"
+          className="lab-btn lab-btn-tertiary compact"
+          disabled={props.page >= props.totalPages}
+          onClick={() => props.onChange(props.page + 1)}
+        >
+          다음
+        </button>
+      </div>
     </div>
   );
+}
+
+function buildPaginationItems(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const items: Array<number | "ellipsis"> = [1];
+  let start = Math.max(2, currentPage - 1);
+  let end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (currentPage <= 3) {
+    end = 4;
+  }
+  if (currentPage >= totalPages - 2) {
+    start = totalPages - 3;
+  }
+
+  if (start > 2) {
+    items.push("ellipsis");
+  }
+
+  for (let page = start; page <= end; page += 1) {
+    items.push(page);
+  }
+
+  if (end < totalPages - 1) {
+    items.push("ellipsis");
+  }
+
+  items.push(totalPages);
+  return items;
 }
 
 function toStatusLabel(status: BulkJob["status"]): string {

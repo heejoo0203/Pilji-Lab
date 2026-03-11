@@ -59,8 +59,11 @@ export function BulkUploadPanel(props: Props) {
   };
 
   return (
-    <section className="panel">
-      <h2>파일 조회</h2>
+    <section className="lab-surface">
+      <div className="lab-section-head compact">
+        <h2>파일 조회</h2>
+        <p>표준 양식 확인, 업로드, 최신 작업 상태 확인을 한 화면에서 처리합니다.</p>
+      </div>
 
       <div className="bulk-guide-grid">
         <div className="bulk-guide-card">
@@ -76,7 +79,7 @@ export function BulkUploadPanel(props: Props) {
             <strong>도로명 권장:</strong> {props.guide?.recommended_road.join(", ") ?? "시도, 시군구, 도로명, 건물본번, 건물부번"}
           </p>
           <p className="guide-row hint">{rowsLimitText}</p>
-          <button type="button" className="nav-item" onClick={props.onDownloadTemplate}>
+          <button type="button" className="lab-btn lab-btn-tertiary compact" onClick={props.onDownloadTemplate}>
             표준 양식 다운로드
           </button>
         </div>
@@ -137,14 +140,14 @@ export function BulkUploadPanel(props: Props) {
             <option value="jibun">지번</option>
             <option value="road">도로명</option>
           </select>
-          <button type="button" className="btn-primary full" disabled={props.uploading} onClick={props.onUpload}>
+          <button type="button" className="lab-btn lab-btn-primary full" disabled={props.uploading} onClick={props.onUpload}>
             {props.uploading ? <LoadingIndicator label="조회 중" kind="dots" /> : "조회"}
           </button>
           {props.selectedFileName ? (
             <div className="hint">
               선택 파일: {props.selectedFileName} ({formatFileSize(props.selectedFileSize)})
               {" "}
-              <button type="button" className="btn-link" onClick={() => props.onSelectFile(null)}>
+              <button type="button" className="lab-btn lab-btn-tertiary compact" onClick={() => props.onSelectFile(null)}>
                 선택 해제
               </button>
             </div>

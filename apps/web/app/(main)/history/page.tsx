@@ -154,6 +154,18 @@ export default function HistoryPage() {
   }, [isLoggedIn, appliedFilter]);
 
   const allSelected = records.length > 0 && records.every((item) => selectedLogIds.has(item.id));
+  const selectedCount = selectedLogIds.size;
+  const activeFilterSummary = useMemo(() => {
+    const items = [`유형 ${appliedFilter.searchType === "all" ? "전체" : toSearchTypeLabel(appliedFilter.searchType)}`];
+    if (appliedFilter.sido) {
+      items.push(`시/도 ${appliedFilter.sido}`);
+    }
+    if (appliedFilter.sigungu) {
+      items.push(`시/군/구 ${appliedFilter.sigungu}`);
+    }
+    items.push(`정렬 ${toSortSummary(appliedFilter.sortBy, appliedFilter.sortOrder)}`);
+    return items;
+  }, [appliedFilter]);
 
   const handleToggleSelect = (logId: string) => {
     setSelectedLogIds((prev) => {
@@ -222,6 +234,15 @@ export default function HistoryPage() {
     }
   };
 
+  const restoreRecord = (row: SearchHistoryLog) => {
+    if (deleting) return;
+    if (row.search_type === "map") {
+      router.push(`/map?recordId=${row.id}`);
+      return;
+    }
+    router.push(`/search?recordId=${row.id}`);
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="lab-page history-shell">
@@ -273,111 +294,132 @@ export default function HistoryPage() {
         </div>
       </section>
 
-      <section className="panel">
-        <h2>조회기록</h2>
+      <section className="lab-surface">
+        <div className="lab-section-head compact">
+          <h2>조회기록</h2>
+          <p>필터를 적용한 뒤 필요한 기록만 다시 열고, 불필요한 기록은 선택 삭제할 수 있습니다.</p>
+        </div>
 
         <div className="history-filter-grid">
-        <label className="field-label">
-          유형 필터
-          <select
-            className="modal-input"
-            value={searchTypeFilter}
-            onChange={(event) => setSearchTypeFilter(event.target.value as SearchTypeFilter)}
-          >
-            <option value="all">전체</option>
-            <option value="jibun">지번</option>
-            <option value="road">도로명</option>
-            <option value="map">지도</option>
-          </select>
-        </label>
+          <label className="field-label">
+            유형 필터
+            <select
+              className="modal-input"
+              value={searchTypeFilter}
+              onChange={(event) => setSearchTypeFilter(event.target.value as SearchTypeFilter)}
+            >
+              <option value="all">전체</option>
+              <option value="jibun">지번</option>
+              <option value="road">도로명</option>
+              <option value="map">지도</option>
+            </select>
+          </label>
 
-        <label className="field-label">
-          시/도 필터
-          <select
-            className="modal-input"
-            value={sidoFilter}
-            onChange={(event) => {
-              setSidoFilter(event.target.value);
+          <label className="field-label">
+            시/도 필터
+            <select
+              className="modal-input"
+              value={sidoFilter}
+              onChange={(event) => {
+                setSidoFilter(event.target.value);
+                setSigunguFilter("");
+              }}
+            >
+              <option value="">전체</option>
+              {sidoOptions.map((sido) => (
+                <option key={sido} value={sido}>
+                  {sido}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field-label">
+            시/군/구 필터
+            <select
+              className="modal-input"
+              value={sigunguFilter}
+              onChange={(event) => setSigunguFilter(event.target.value)}
+            >
+              <option value="">전체</option>
+              {sigunguOptions.map((sigungu) => (
+                <option key={sigungu} value={sigungu}>
+                  {sigungu}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="history-filter-actions">
+          <button
+            type="button"
+            className="lab-btn lab-btn-primary"
+            onClick={() =>
+              setAppliedFilter({
+                searchType: searchTypeFilter,
+                sido: sidoFilter,
+                sigungu: sigunguFilter,
+                sortBy: sortState.sortBy ?? "created_at",
+                sortOrder: sortState.sortBy && sortState.sortOrder ? sortState.sortOrder : "desc",
+              })
+            }
+          >
+            조건 적용
+          </button>
+
+          <button
+            type="button"
+            className="lab-btn lab-btn-tertiary"
+            onClick={() => {
+              setSearchTypeFilter("all");
+              setSidoFilter("");
               setSigunguFilter("");
+              setSortState({ sortBy: null, sortOrder: null });
+              setAppliedFilter({
+                searchType: "all",
+                sido: "",
+                sigungu: "",
+                sortBy: "created_at",
+                sortOrder: "desc",
+              });
             }}
           >
-            <option value="">전체</option>
-            {sidoOptions.map((sido) => (
-              <option key={sido} value={sido}>
-                {sido}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field-label">
-          시/군/구 필터
-          <select
-            className="modal-input"
-            value={sigunguFilter}
-            onChange={(event) => setSigunguFilter(event.target.value)}
-          >
-            <option value="">전체</option>
-            {sigunguOptions.map((sigungu) => (
-              <option key={sigungu} value={sigungu}>
-                {sigungu}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={() =>
-            setAppliedFilter({
-              searchType: searchTypeFilter,
-              sido: sidoFilter,
-              sigungu: sigunguFilter,
-              sortBy: sortState.sortBy ?? "created_at",
-              sortOrder: sortState.sortBy && sortState.sortOrder ? sortState.sortOrder : "desc",
-            })
-          }
-        >
-          조건 적용
-        </button>
-
-        <button
-          type="button"
-          className="nav-item"
-          onClick={() => {
-            setSearchTypeFilter("all");
-            setSidoFilter("");
-            setSigunguFilter("");
-            setSortState({ sortBy: null, sortOrder: null });
-            setAppliedFilter({
-              searchType: "all",
-              sido: "",
-              sigungu: "",
-              sortBy: "created_at",
-              sortOrder: "desc",
-            });
-          }}
-        >
-          필터 초기화
-        </button>
+            필터 초기화
+          </button>
+        </div>
+        <div className="history-filter-summary">
+          {activeFilterSummary.map((item) => (
+            <span key={item} className="history-filter-pill">
+              {item}
+            </span>
+          ))}
         </div>
 
         <div className="bulk-table-head">
-        <h2>기록 목록</h2>
-        <div className="bulk-head-actions">
-          <button type="button" className="nav-item" onClick={() => void reloadRecords()} disabled={loading || deleting}>
-            새로고침
-          </button>
-          <button
-            type="button"
-            className="nav-item danger"
-            onClick={() => void handleDeleteSelected()}
-            disabled={selectedLogIds.size === 0 || deleting || loading}
-          >
-            {deleting ? "삭제 중..." : "선택 삭제"}
-          </button>
-        </div>
+          <div className="lab-section-head compact">
+            <h2>기록 목록</h2>
+            <p className="table-toolbar-meta">
+              현재 결과 {records.length}건 · 선택 {selectedCount}건
+            </p>
+          </div>
+          <div className="bulk-head-actions">
+            <button
+              type="button"
+              className="lab-btn lab-btn-tertiary compact"
+              onClick={() => void reloadRecords()}
+              disabled={loading || deleting}
+            >
+              새로고침
+            </button>
+            <button
+              type="button"
+              className="lab-btn lab-btn-danger compact"
+              onClick={() => void handleDeleteSelected()}
+              disabled={selectedCount === 0 || deleting || loading}
+            >
+              {deleting ? "삭제 중..." : "선택 삭제"}
+            </button>
+          </div>
         </div>
 
         {loading ? <p className="hint">불러오는 중...</p> : null}
@@ -433,23 +475,13 @@ export default function HistoryPage() {
                   결과건수 <span aria-hidden>{sortMark(sortState, "result_count")}</span>
                 </button>
               </th>
+              <th className="history-center-col">열기</th>
             </tr>
           </thead>
           <tbody>
             {records.map((row, idx) => (
-              <tr
-                key={row.id}
-                onClick={() => {
-                  if (deleting) return;
-                  if (row.search_type === "map") {
-                    router.push(`/map?recordId=${row.id}`);
-                    return;
-                  }
-                  router.push(`/search?recordId=${row.id}`);
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <td className="checkbox-col" data-label="선택" onClick={(event) => event.stopPropagation()}>
+              <tr key={row.id}>
+                <td className="checkbox-col" data-label="선택">
                   <input
                     type="checkbox"
                     aria-label={`${row.address_summary} 선택`}
@@ -463,12 +495,22 @@ export default function HistoryPage() {
                 <td data-label="유형" className="history-center-col">{toSearchTypeLabel(row.search_type)}</td>
                 <td data-label="주소" className="history-address-col">{row.address_summary}</td>
                 <td data-label="결과건수" className="history-center-col">{row.result_count}</td>
+                <td data-label="열기" className="history-action-col">
+                  <button
+                    type="button"
+                    className="lab-btn lab-btn-secondary compact history-restore-btn"
+                    onClick={() => restoreRecord(row)}
+                    disabled={deleting}
+                  >
+                    {row.search_type === "map" ? "지도 열기" : "결과 열기"}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
           </table>
         )}
-        <p className="hint">행을 클릭하면 해당 유형(개별조회/지도조회) 페이지로 이동해 결과를 다시 표시합니다.</p>
+        <p className="hint">열기 버튼을 누르면 해당 유형(개별조회/지도조회) 화면에서 같은 결과를 다시 복원합니다.</p>
       </section>
     </div>
   );
@@ -517,6 +559,16 @@ function nextSort(current: SortState, clickedSortBy: SortBy): SortState {
   }
 
   return { sortBy: clickedSortBy, sortOrder: "desc" };
+}
+
+function toSortSummary(sortBy: SortBy, sortOrder: SortOrder): string {
+  const labelMap: Record<SortBy, string> = {
+    created_at: "일시",
+    address_summary: "주소",
+    search_type: "유형",
+    result_count: "결과건수",
+  };
+  return `${labelMap[sortBy]} ${sortOrder === "asc" ? "오름차순" : "내림차순"}`;
 }
 
 function sortMark(state: SortState, sortBy: SortBy): string {

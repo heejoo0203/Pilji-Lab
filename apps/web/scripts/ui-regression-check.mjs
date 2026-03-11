@@ -19,6 +19,8 @@ const searchPage = read("app/(main)/search/page.tsx");
 const filesPage = read("app/(main)/files/page.tsx");
 const historyPage = read("app/(main)/history/page.tsx");
 const myPage = read("app/(main)/mypage/page.tsx");
+const bulkJobTable = read("app/components/files/bulk-job-table.tsx");
+const brandRefresh = read("app/brand-refresh.css");
 
 assertIncludes(
   mapDrawer,
@@ -56,6 +58,16 @@ assertIncludes(
   "history page should distinguish total count from filtered result count",
 );
 assertIncludes(
+  historyPage,
+  "restoreRecord(row)",
+  "history page should provide an explicit restore action for each row",
+);
+assertIncludes(
+  bulkJobTable,
+  "buildPaginationItems(props.page, props.totalPages)",
+  "bulk job table should use condensed pagination items instead of rendering every page button",
+);
+assertIncludes(
   myPage,
   'const [activeAction, setActiveAction] = useState<null | "profile" | "password" | "withdrawal">(null);',
   "mypage should track which account action is currently running",
@@ -64,6 +76,16 @@ assertIncludes(
   myPage,
   'authLoading && activeAction === "withdrawal" ? "탈퇴 처리 중..." : "회원 탈퇴"',
   "mypage withdrawal button should show action-specific loading state",
+);
+assertIncludes(
+  myPage,
+  'const androidApkPath = "/downloads/autoLV-android-release-v2.2.0.apk";',
+  "mypage should point users to the current Android APK version",
+);
+assertIncludes(
+  brandRefresh,
+  ".lab-btn.full,",
+  "lab button full-width modifier should be styled for mypage and other CTA buttons",
 );
 
 console.log("ui-regression-check: ok");
