@@ -110,6 +110,39 @@ python scripts/run_accuracy_golden_set.py
 | `L-006` | 2026-03-11 | Codex | api service smoke / desktop | pass | `map/click` 결과 `4113511000105320000`, 현재가 `27,630,000`, 주소 요약 정상 |
 | `L-007` | 2026-03-11 | Codex | api service smoke / desktop | pass | `map/search` 와 같은 좌표의 `map/click` 결과 일치 |
 
+### 5.4 2026-03-11 구역조회 자동 실행 결과
+- 실행 명령
+```powershell
+cd apps/api
+$env:FORCE_DISABLE_REDIS='1'
+python scripts/run_zone_flow_smoke.py
+```
+- 실행 환경
+  - PostGIS 연결이 가능한 운영형 DB 필요
+  - 임시 사용자 1명과 임시 구역 2개를 생성한 뒤 같은 스크립트에서 삭제
+  - 기준 샘플 주소: `서울특별시 마포구 마포대로 89`
+  - 비교는 프론트 카드 렌더링이 아니라 포함 필지 delta의 데이터 레벨 smoke로 검증
+
+| 케이스 ID | 실행일 | 실행자 | 환경 | 결과 | 비고 |
+| --- | --- | --- | --- | --- | --- |
+| `Z-002` | 2026-03-11 | Codex | api zone smoke / desktop | pass | `overlap_threshold=0.9`, 포함 1건, 경계 후보 2건 확인 |
+| `Z-005` | 2026-03-11 | Codex | api zone smoke / desktop | pass | 경계 후보 `1144010400100170013` 수동 포함 후 `user_included`, 요약 필지수 증가 |
+| `Z-006` | 2026-03-11 | Codex | api zone smoke / desktop | pass | 확정 포함 `1144010400105720001` 수동 제외 후 `user_excluded`, 요약 필지수 감소 |
+| `Z-008` | 2026-03-11 | Codex | api zone smoke / desktop | pass | 저장/목록/상세/이름변경/삭제 흐름 정상 |
+| `Z-009` | 2026-03-11 | Codex | api zone smoke / desktop | pass | `threshold 0.9 -> 0.6` 저장 구역 비교 시 포함 필지 delta 확인 |
+
+### 5.5 자동화 미포함 항목
+- `Z-001`
+  - 단순 포함 샘플은 별도 안정 좌표셋을 더 고정한 뒤 추가
+- `Z-003`
+  - AI 충돌 문구와 카드 노출은 화면 레벨 수동 검증이 더 적합
+- `Z-004`
+  - 이상치 우선 노출은 건축물/가격 조합 화면 확인이 필요
+- `Z-007`
+  - 보류 필터와 해제 UX는 프론트 상호작용 중심이라 수동 QA 우선
+- `Z-009 UI`
+  - 비교 카드 자체의 문구/레이아웃은 `/map` 수동 QA로 별도 확인
+
 ## 6. 이번 주 완료 조건
 - 기본조회 골든셋 `L-001 ~ L-007` 중 치명 실패 없음
 - 구역조회 골든셋 `Z-001 ~ Z-009` 중 저장/복원/비교 흐름 치명 실패 없음

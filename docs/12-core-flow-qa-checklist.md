@@ -120,6 +120,12 @@ python scripts/run_accuracy_golden_set.py
 - `ai_recommendation`, `confidence_score`, `selection_origin`, `anomaly_level` 이 사용자 판단에 충분한지 확인한다.
 - 수동 포함/제외 후 요약 수치와 선택 출처가 즉시 갱신되는지 확인한다.
 - 저장 후 재열람/비교 시 동일 구역 상태가 재현되는지 확인한다.
+- 자동 구역 smoke 실행:
+```powershell
+cd apps/api
+$env:FORCE_DISABLE_REDIS='1'
+python scripts/run_zone_flow_smoke.py
+```
 
 ### 4.3 오포함/누락 기록 양식
 - 케이스 ID
