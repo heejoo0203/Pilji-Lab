@@ -150,11 +150,9 @@ def _resolve_road_name_file_path(configured: str) -> str:
     repo_root = _resolve_project_root()
     candidates.extend(
         [
-            repo_root / "docs" / "TN_SPRD_RDNM.txt",
             repo_root / "apps" / "api" / "TN_SPRD_RDNM.txt",
             repo_root / "TN_SPRD_RDNM.txt",
             repo_root / "app" / "data" / "TN_SPRD_RDNM.txt",
-            Path.cwd() / "docs" / "TN_SPRD_RDNM.txt",
             Path.cwd() / "apps" / "api" / "TN_SPRD_RDNM.txt",
             Path.cwd() / "TN_SPRD_RDNM.txt",
             Path.cwd() / "app" / "data" / "TN_SPRD_RDNM.txt",

@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="860" viewBox="0 0 1500 860" role="img" aria-labelledby="title desc">
+  <title id="title">Pilji-Lab system architecture</title>
+  <desc id="desc">Current production architecture for web, api, worker, data stores, proxy, and external services.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f4f1ea; }
+      .group { fill: #fffdf8; stroke: #d7c8ac; stroke-width: 2; rx: 24; }
+      .box { fill: #ffffff; stroke: #d9d4c7; stroke-width: 2; rx: 18; }
+      .title { font: 700 34px 'Segoe UI', sans-serif; fill: #17324d; }
+      .groupTitle { font: 700 24px 'Segoe UI', sans-serif; fill: #17324d; }
+      .boxTitle { font: 700 20px 'Segoe UI', sans-serif; fill: #1d4b7a; }
+      .text { font: 15px 'Segoe UI', sans-serif; fill: #334155; }
+      .small { font: 14px 'Segoe UI', sans-serif; fill: #475569; }
+      .arrow { stroke: #255f8d; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#255f8d" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1500" height="860" />
+  <text class="title" x="60" y="70">Pilji-Lab Architecture</text>
+
+  <rect class="group" x="60" y="120" width="390" height="650" />
+  <text class="groupTitle" x="90" y="165">Client Layer</text>
+
+  <rect class="box" x="90" y="200" width="330" height="170" />
+  <text class="boxTitle" x="120" y="235">Web App</text>
+  <text class="text" x="120" y="270">Next.js 15 / React 19</text>
+  <text class="small" x="120" y="304">- /search, /map, /files, /history, /mypage</text>
+  <text class="small" x="120" y="332">- Kakao Maps workspace</text>
+  <text class="small" x="120" y="360">- Next route handler proxy</text>
+
+  <rect class="box" x="90" y="400" width="330" height="140" />
+  <text class="boxTitle" x="120" y="435">Mobile Wrapper</text>
+  <text class="text" x="120" y="470">Capacitor Android app</text>
+  <text class="small" x="120" y="504">- wraps https://auto-lv.vercel.app</text>
+
+  <rect class="box" x="90" y="570" width="330" height="160" />
+  <text class="boxTitle" x="120" y="605">User Flows</text>
+  <text class="small" x="120" y="639">- single parcel lookup</text>
+  <text class="small" x="120" y="667">- map click and address search</text>
+  <text class="small" x="120" y="695">- zone analysis and saved zones</text>
+
+  <rect class="group" x="520" y="120" width="430" height="650" />
+  <text class="groupTitle" x="550" y="165">Application Layer</text>
+
+  <rect class="box" x="550" y="200" width="370" height="180" />
+  <text class="boxTitle" x="580" y="235">API Service</text>
+  <text class="text" x="580" y="270">FastAPI / Railway</text>
+  <text class="small" x="580" y="304">- auth, land, bulk, history, map</text>
+  <text class="small" x="580" y="332">- Pydantic validation</text>
+  <text class="small" x="580" y="360">- SQLAlchemy repositories and services</text>
+
+  <rect class="box" x="550" y="410" width="370" height="150" />
+  <text class="boxTitle" x="580" y="445">Worker</text>
+  <text class="text" x="580" y="480">Bulk queue processor</text>
+  <text class="small" x="580" y="514">- file normalization</text>
+  <text class="small" x="580" y="542">- asynchronous lookup and result writer</text>
+
+  <rect class="box" x="550" y="590" width="370" height="140" />
+  <text class="boxTitle" x="580" y="625">Network Fallback</text>
+  <text class="text" x="580" y="660">VWorld proxy</text>
+  <text class="small" x="580" y="694">- fixed outbound IP via AWS EC2</text>
+
+  <rect class="group" x="1020" y="120" width="420" height="650" />
+  <text class="groupTitle" x="1050" y="165">Data and External Layer</text>
+
+  <rect class="box" x="1050" y="200" width="360" height="150" />
+  <text class="boxTitle" x="1080" y="235">Data Stores</text>
+  <text class="text" x="1080" y="270">PostgreSQL + PostGIS / Neon</text>
+  <text class="small" x="1080" y="304">- users, query_logs, parcels</text>
+  <text class="small" x="1080" y="332">- zone_analyses, zone_analysis_parcels</text>
+
+  <rect class="box" x="1050" y="380" width="360" height="130" />
+  <text class="boxTitle" x="1080" y="415">Cache and Queue</text>
+  <text class="text" x="1080" y="450">Redis</text>
+  <text class="small" x="1080" y="484">- bulk queue, PNU cache, metadata cache</text>
+
+  <rect class="box" x="1050" y="540" width="360" height="190" />
+  <text class="boxTitle" x="1080" y="575">External Services</text>
+  <text class="small" x="1080" y="609">- VWorld: land price, address, parcel features</text>
+  <text class="small" x="1080" y="637">- Kakao Maps JS SDK: client map rendering</text>
+  <text class="small" x="1080" y="665">- Building ledger API: building metrics</text>
+
+  <path class="arrow" d="M420 285 L550 285" />
+  <path class="arrow" d="M420 470 L550 470" />
+  <path class="arrow" d="M920 285 L1050 285" />
+  <path class="arrow" d="M920 470 L1050 445" />
+  <path class="arrow" d="M920 660 L1050 635" />
+
+  <text class="small" x="452" y="265">HTTP + cookie session</text>
+  <text class="small" x="952" y="265">SQL and spatial queries</text>
+  <text class="small" x="942" y="425">job queue and cache access</text>
+  <text class="small" x="942" y="620">proxy fallback to VWorld</text>
+</svg>

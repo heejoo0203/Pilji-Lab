@@ -228,7 +228,7 @@
 - 대량조회 업로드/결과: `apps/api/storage/bulk`
 - 프로필 이미지: `apps/api/storage/profile_images`
 
-운영에서는 스토리지 볼륨 또는 외부 오브젝트 스토리지 연계를 권장한다.
+운영 환경에서는 스토리지 볼륨 또는 외부 오브젝트 스토리지를 사용한다.
 
 ## 3.1 응답 조합 필드
 - 아래 값들은 별도 영속 테이블이 아니라 응답 생성 시 조합되는 경우가 있다.
@@ -250,7 +250,7 @@
 - `query_logs`: 사용자 조회기록 영구 저장(회원 탈퇴 시 함께 삭제)
 - `bulk_jobs`: 사용자 작업 이력 저장(회원 탈퇴 시 파일 포함 삭제)
 - `zone_analyses`, `zone_analysis_parcels`, `zone_ai_feedbacks`: 구역분석 이력/상세/AI 피드백 저장(회원 탈퇴 시 함께 삭제)
-- `email_verifications`: 인증 수명주기 테이블(만료/사용 완료 데이터 정리 권장)
+- `email_verifications`: 인증 수명주기 테이블(만료/사용 완료 데이터 정리)
 - `users`: 회원 탈퇴 시 관련 참조 데이터 정리 후 삭제
 
 ## 5. 운영 체크포인트
@@ -259,94 +259,3 @@
 3. PostgreSQL 환경에서 `postgis_version()` 확인
 4. `parcels` 인덱스(`idx_parcels_geog_gist`, `idx_parcels_geom_gist`) 존재 확인
 5. 관리자 계정 시드 필요 시 `scripts/reset_db_and_seed_admin.py` 실행
-
-## 6. 예정 스키마 확장 (v3.x)
-정확도 추적과 작업 시스템 고도화를 위해 다음 확장을 권장한다.
-
-### 6.1 zone_building_metrics (예정)
-- `id` (String(36), PK)
-- `zone_analysis_id` (String(36), FK -> `zone_analyses.id`, NOT NULL, UNIQUE)
-- `aging_threshold_years` (Integer, NOT NULL)
-- `building_count` (Integer, NOT NULL)
-- `aged_building_count` (Integer, NOT NULL)
-- `aging_ratio` (Float, NOT NULL)
-- `average_approval_year` (Integer, NULL)
-- `total_site_area_sqm` (Float, NULL)
-- `total_gross_floor_area_sqm` (Float, NULL)
-- `floor_area_ratio` (Float, NULL)
-- `created_at` (DateTime(timezone=True), NOT NULL)
-- `updated_at` (DateTime(timezone=True), NOT NULL)
-
-### 6.2 zone_ai_suggestions (예정)
-- `id` (String(36), PK)
-- `zone_analysis_id` (String(36), FK -> `zone_analyses.id`, NOT NULL, INDEX)
-- `pnu` (String(19), NOT NULL, INDEX)
-- `model_version` (String(50), NOT NULL, INDEX)
-- `recommendation` (String(20), NOT NULL)  
-  허용: `included | excluded | uncertain`
-- `confidence` (Float, NOT NULL)
-- `reason_codes_json` (Text, NOT NULL)
-- `reason_text` (Text, NULL)
-- `generated_at` (DateTime(timezone=True), NOT NULL, INDEX)
-- Unique 제약(권장): `zone_analysis_id + pnu + model_version`
-
-비고:
-- 최종 계산 결과 테이블이 아니라, 사용자 검토용 추천 캐시/이력 테이블이다.
-- 구역 분석 원본 계산값은 계속 `zone_analysis_parcels`와 `parcels`가 기준이 된다.
-
-### 6.4 vworld_raw_payloads (예정)
-- `id` (String(36), PK)
-- `source_path` (String(120), NOT NULL, INDEX)
-- `request_key` (String(255), NOT NULL, INDEX)
-- `request_params_json` (Text, NOT NULL)
-- `response_body` (Text, NOT NULL)
-- `fetched_at` (DateTime(timezone=True), NOT NULL, INDEX)
-
-비고:
-- VWorld 원문 응답 보관용 raw 계층이다.
-- 추후 값 재현, 장애 분석, 정규화 로직 회귀 검증에 사용한다.
-
-### 6.5 building_register_raw_payloads (예정)
-- `id` (String(36), PK)
-- `pnu` (String(19), NOT NULL, INDEX)
-- `endpoint_name` (String(80), NOT NULL, INDEX)
-- `request_params_json` (Text, NOT NULL)
-- `response_body` (Text, NOT NULL)
-- `fetched_at` (DateTime(timezone=True), NOT NULL, INDEX)
-
-비고:
-- 건축물대장 표제부/총괄표제부/전유부 원문 저장용 raw 계층이다.
-
-### 6.6 parcel_serving_snapshots (예정)
-- `id` (String(36), PK)
-- `pnu` (String(19), NOT NULL, INDEX)
-- `base_year` (String(4), NOT NULL, INDEX)
-- `price_current` (BigInteger, NULL)
-- `price_previous` (BigInteger, NULL)
-- `land_category_name` (String(100), NULL)
-- `purpose_area_name` (String(100), NULL)
-- `area_sqm` (Float, NULL)
-- `source_version` (String(50), NOT NULL)
-- `algorithm_version` (String(50), NOT NULL)
-- `created_at` (DateTime(timezone=True), NOT NULL)
-
-비고:
-- 화면/다운로드/리포트에 바로 쓰는 serving 계층이다.
-- 동일 기준연도 기준의 재현성 확보용이다.
-
-### 6.7 zone_ai_model_registry (예정)
-- `id` (String(36), PK)
-- `model_name` (String(50), NOT NULL, INDEX)
-- `model_version` (String(50), NOT NULL, UNIQUE)
-- `model_type` (String(30), NOT NULL)  
-  예: `lightgbm`, `xgboost`, `rule-ensemble`
-- `status` (String(20), NOT NULL)  
-  예: `active | shadow | retired`
-- `feature_schema_json` (Text, NOT NULL)
-- `metrics_json` (Text, NOT NULL)
-- `created_at` (DateTime(timezone=True), NOT NULL)
-- `updated_at` (DateTime(timezone=True), NOT NULL)
-
-비고:
-- 운영 중인 추천 모델 버전과 성능 지표를 관리한다.
-- 계산 엔진을 대체하는 목적이 아니라 추천 모델 운영 메타데이터 관리용이다.
