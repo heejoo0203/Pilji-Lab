@@ -121,6 +121,7 @@ npm run qa:smoke
 - 유형: 오포함 / 누락 / 경계 / 이상치 / 문구 혼동
 - 재현 가능 여부
 - 스크린샷/기록 링크
+- 상세 케이스 매트릭스: [docs/13-accuracy-golden-set.md](/d:/Users/Desktop/HJ/04_코딩/Pilji-Lab/docs/13-accuracy-golden-set.md)
 
 ## 5. 이번 주 릴리즈 게이트
 - 자동 스모크 통과
