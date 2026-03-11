@@ -57,6 +57,7 @@ def calculate_summary(
 
 
 def recalculate_zone_summary(db: Session, analysis: ZoneAnalysis) -> None:
+    db.flush()
     rows = db.query(ZoneAnalysisParcel).filter(ZoneAnalysisParcel.zone_analysis_id == analysis.id).all()
     included_rows = [row for row in rows if row.included]
     years = [row.price_year for row in included_rows if row.price_year and row.price_current is not None]
