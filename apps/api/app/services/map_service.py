@@ -60,30 +60,32 @@ def lookup_map_by_click(db: Session, payload: MapClickRequest) -> MapLookupRespo
     cached = _find_cached_parcel(db, pnu)
     rows: list[LandResultRow] = []
     cache_hit = False
+    cache_is_fresh = bool(cached and _is_fresh(cached.get("updated_at")))
+    cached_area = _to_float(cached.get("area")) if cached else None
+    cached_price_current = _to_int(cached.get("price_current")) if cached else None
+    cached_price_previous = _to_int(cached.get("price_previous")) if cached else None
 
-    if cached and _is_fresh(cached.get("updated_at")):
-        area = _to_float(cached.get("area"))
-        price_current = _to_int(cached.get("price_current"))
-        price_previous = _to_int(cached.get("price_previous"))
-        if area is None:
-            details = _fetch_land_characteristics_latest(pnu)
-            area = _extract_area_from_candidate(details)
-            if area is not None:
-                _upsert_parcel_snapshot(
-                    db=db,
-                    pnu=pnu,
-                    lat=payload.lat,
-                    lng=payload.lng,
-                    area=area,
-                    price_current=price_current,
-                    price_previous=price_previous,
-                )
-        cache_hit = True
-    else:
+    area = cached_area
+    if area is None and cache_is_fresh:
+        details = _fetch_land_characteristics_latest(pnu)
+        area = _extract_area_from_candidate(details)
+        if area is not None:
+            _upsert_parcel_snapshot(
+                db=db,
+                pnu=pnu,
+                lat=payload.lat,
+                lng=payload.lng,
+                area=area,
+                price_current=cached_price_current,
+                price_previous=cached_price_previous,
+            )
+
+    try:
         rows = fetch_individual_land_price_rows(pnu)
-        price_current = _parse_price(rows[0].개별공시지가) if rows else None
-        price_previous = _parse_price(rows[1].개별공시지가) if len(rows) > 1 else None
-        area = _fetch_parcel_area(pnu)
+        price_current = _parse_price(rows[0].개별공시지가) if rows else cached_price_current
+        price_previous = _parse_price(rows[1].개별공시지가) if len(rows) > 1 else cached_price_previous
+        if area is None:
+            area = _fetch_parcel_area(pnu)
         _upsert_parcel_snapshot(
             db=db,
             pnu=pnu,
@@ -93,6 +95,14 @@ def lookup_map_by_click(db: Session, payload: MapClickRequest) -> MapLookupRespo
             price_current=price_current,
             price_previous=price_previous,
         )
+    except HTTPException:
+        if not cached:
+            raise
+        price_current = cached_price_current
+        price_previous = cached_price_previous
+        if area is None:
+            area = _fetch_parcel_area(pnu)
+        cache_hit = True
 
     nearby_avg = _fetch_nearby_avg_price(db, pnu, payload.lat, payload.lng, settings.map_nearby_radius_m)
     growth_rate = _calculate_growth_rate(price_current, price_previous)

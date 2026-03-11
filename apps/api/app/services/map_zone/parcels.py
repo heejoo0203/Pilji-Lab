@@ -213,7 +213,6 @@ def upsert_parcel_geometries(db: Session, features: list[VWorldParcelFeature]) -
                 "id": str(uuid.uuid4()),
                 "pnu": item.pnu,
                 "geometry_json": item.geometry_json,
-                "price_current": item.price_current,
             }
             for item in features
         ],
@@ -226,15 +225,13 @@ def upsert_parcel_geometries(db: Session, features: list[VWorldParcelFeature]) -
               SELECT
                 item->>'id' AS id,
                 item->>'pnu' AS pnu,
-                item->>'geometry_json' AS geometry_json,
-                NULLIF(item->>'price_current', '')::BIGINT AS price_current
+                item->>'geometry_json' AS geometry_json
               FROM jsonb_array_elements(CAST(:feature_payload AS JSONB)) AS item
             ),
             geom_data AS (
               SELECT
                 id,
                 pnu,
-                price_current,
                 ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(geometry_json), 4326)) AS geom
               FROM src
             ),
@@ -242,7 +239,6 @@ def upsert_parcel_geometries(db: Session, features: list[VWorldParcelFeature]) -
               SELECT
                 id,
                 pnu,
-                price_current,
                 ST_Y(ST_Centroid(geom)) AS lat,
                 ST_X(ST_Centroid(geom)) AS lng,
                 ST_Area(geom::geography) AS area,
@@ -258,7 +254,7 @@ def upsert_parcel_geometries(db: Session, features: list[VWorldParcelFeature]) -
               lat,
               lng,
               area,
-              price_current,
+              NULL,
               NULL,
               :updated_at,
               ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
@@ -269,8 +265,6 @@ def upsert_parcel_geometries(db: Session, features: list[VWorldParcelFeature]) -
               lat = EXCLUDED.lat,
               lng = EXCLUDED.lng,
               area = COALESCE(EXCLUDED.area, parcels.area),
-              price_current = COALESCE(EXCLUDED.price_current, parcels.price_current),
-              updated_at = EXCLUDED.updated_at,
               geog = EXCLUDED.geog,
               geom = EXCLUDED.geom
             """
