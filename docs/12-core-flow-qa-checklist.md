@@ -106,6 +106,14 @@ npm run qa:smoke
 - 같은 필지를 지번/도로명/지도 클릭으로 조회했을 때 최신 연도 가격이 일치해야 한다.
 - 연도별 공시지가 행은 기준년도 내림차순이어야 한다.
 - 전년 대비 수치가 최신값과 이전값 기준으로 계산되는지 확인한다.
+- 자동 기본조회 smoke 실행:
+```powershell
+cd apps/api
+$env:DATABASE_URL='sqlite:///./autolv.db'
+$env:FORCE_DISABLE_REDIS='1'
+$env:BULK_EXECUTION_MODE='background'
+python scripts/run_accuracy_golden_set.py
+```
 
 ### 4.2 구역조회 정확도
 - `boundary_candidate` 필지가 리뷰 큐와 테이블에 노출되는지 확인한다.

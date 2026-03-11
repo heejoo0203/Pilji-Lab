@@ -22,7 +22,7 @@
 - 최신 연도 `개별공시지가`가 입력 경로와 무관하게 동일해야 한다.
 - `전년 대비`는 최신값과 바로 이전 연도 값 기준으로 계산되어야 한다.
 - `연도별 공시지가`는 기준년도 내림차순이어야 한다.
-- `기준일자`는 `1/1` 형태로 읽기 가능해야 한다.
+- 백엔드 원본 `기준일자`는 `01월 01일`로 내려오더라도, 웹 UI에서는 `1/1` 형태로 읽기 가능해야 한다.
 - `/search`와 `/map`의 핵심 값 표현이 다르게 보이지 않아야 한다.
 
 ### 2.2 케이스 매트릭스
@@ -83,6 +83,32 @@
 | 이슈 ID | 케이스 ID | 유형 | 기대 결과 | 실제 결과 | 추정 원인 | 재현 여부 | 대응 상태 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `ACC-001` | `Z-002` | 경계 누락 | 경계 후보 노출 | 일반 포함으로 처리 | overlap threshold / rule score | yes / no | open / fixed |
+
+### 5.3 2026-03-11 자동 실행 결과
+- 실행 명령
+```powershell
+cd apps/api
+$env:DATABASE_URL='sqlite:///./autolv.db'
+$env:FORCE_DISABLE_REDIS='1'
+$env:BULK_EXECUTION_MODE='background'
+python scripts/run_accuracy_golden_set.py
+```
+- 실행 환경
+  - `apps/api` 로컬 서비스 레벨 smoke
+  - SQLite 캐시 DB
+  - Redis 비활성 강제
+  - VWorld 실 API 응답 사용
+  - 웹 UI의 `기준일자 1/1` 표기는 [`apps/web` smoke 회귀](/d:/Users/Desktop/HJ/04_코딩/Pilji-Lab/docs/12-core-flow-qa-checklist.md)로 별도 검증
+
+| 케이스 ID | 실행일 | 실행자 | 환경 | 결과 | 비고 |
+| --- | --- | --- | --- | --- | --- |
+| `L-001` | 2026-03-11 | Codex | api service smoke / desktop | pass | `1114010300100310000`, 최신가 `62,570,000 원/㎡`, 기준일자 원본 `01월 01일` |
+| `L-002` | 2026-03-11 | Codex | api service smoke / desktop | pass | `1120011500102690025`, 최신가 `8,018,000 원/㎡`, 응답 정상 |
+| `L-003` | 2026-03-11 | Codex | api service smoke / desktop | pass | `1168011000104290000`, 최신가 `43,580,000 원/㎡`, 도로명 -> PNU 변환 정상 |
+| `L-004` | 2026-03-11 | Codex | api service smoke / desktop | pass | `land/single` 최신가 `25,600,000 원/㎡` 와 `map/search` 현재가 `25,600,000` 일치 |
+| `L-005` | 2026-03-11 | Codex | api service smoke / desktop | pass | `4113511000105320000`, 최신가 `27,630,000 원/㎡`, `map/price-rows` 7건, `area=10766.1` |
+| `L-006` | 2026-03-11 | Codex | api service smoke / desktop | pass | `map/click` 결과 `4113511000105320000`, 현재가 `27,630,000`, 주소 요약 정상 |
+| `L-007` | 2026-03-11 | Codex | api service smoke / desktop | pass | `map/search` 와 같은 좌표의 `map/click` 결과 일치 |
 
 ## 6. 이번 주 완료 조건
 - 기본조회 골든셋 `L-001 ~ L-007` 중 치명 실패 없음
