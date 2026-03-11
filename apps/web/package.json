@@ -8,7 +8,9 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "qa:ui-regression": "node scripts/ui-regression-check.mjs",
+    "qa:smoke": "npm run qa:ui-regression && npm run lint && npm run build"
   },
   "dependencies": {
     "next": "15.5.12",
